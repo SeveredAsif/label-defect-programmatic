@@ -500,40 +500,40 @@ class ContentGate:
         combined = cv2.morphologyEx(step3_open, cv2.MORPH_CLOSE, kernel9, iterations=2)
 
         # --- DEBUG PLOT: Step-by-Step Visualization ---
-        plt.figure(figsize=(15, 8))
+        # plt.figure(figsize=(15, 8))
 
-        plt.subplot(2, 3, 1)
-        plt.imshow(ssim_defect_mask, cmap='gray')
-        plt.title("1. SSIM Defects")
-        plt.axis('off')
+        # plt.subplot(2, 3, 1)
+        # plt.imshow(ssim_defect_mask, cmap='gray')
+        # plt.title("1. SSIM Defects")
+        # plt.axis('off')
 
-        plt.subplot(2, 3, 2)
-        plt.imshow(diff_thresh, cmap='gray')
-        plt.title("2. Diff Threshold Defects")
-        plt.axis('off')
+        # plt.subplot(2, 3, 2)
+        # plt.imshow(diff_thresh, cmap='gray')
+        # plt.title("2. Diff Threshold Defects")
+        # plt.axis('off')
 
-        plt.subplot(2, 3, 3)
-        plt.imshow(step1_or, cmap='gray')
-        plt.title("3. Combined (bitwise_or)")
-        plt.axis('off')
+        # plt.subplot(2, 3, 3)
+        # plt.imshow(step1_or, cmap='gray')
+        # plt.title("3. Combined (bitwise_or)")
+        # plt.axis('off')
 
-        plt.subplot(2, 3, 4)
-        plt.imshow(step2_and, cmap='gray')
-        plt.title("4. Clipped to Foreground (bitwise_and)")
-        plt.axis('off')
+        # plt.subplot(2, 3, 4)
+        # plt.imshow(step2_and, cmap='gray')
+        # plt.title("4. Clipped to Foreground (bitwise_and)")
+        # plt.axis('off')
 
-        plt.subplot(2, 3, 5)
-        plt.imshow(step3_open, cmap='gray')
-        plt.title("5. Noise Removed (MORPH_OPEN)")
-        plt.axis('off')
+        # plt.subplot(2, 3, 5)
+        # plt.imshow(step3_open, cmap='gray')
+        # plt.title("5. Noise Removed (MORPH_OPEN)")
+        # plt.axis('off')
 
-        plt.subplot(2, 3, 6)
-        plt.imshow(combined, cmap='gray')
-        plt.title("6. Final Mask (MORPH_CLOSE)")
-        plt.axis('off')
+        # plt.subplot(2, 3, 6)
+        # plt.imshow(combined, cmap='gray')
+        # plt.title("6. Final Mask (MORPH_CLOSE)")
+        # plt.axis('off')
 
-        plt.tight_layout()
-        plt.show()
+        # plt.tight_layout()
+        # plt.show()
 
 #-------------------------------------------------------------------------------------
         # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
@@ -583,11 +583,11 @@ class ContentGate:
             cv2.putText(combined_with_boxes, f"Area: {int(area)}", (x0, max(15, y0 - 5)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
 
-            plt.figure(figsize=(8, 6))
-            plt.imshow(cv2.cvtColor(combined_with_boxes, cv2.COLOR_BGR2RGB))
-            plt.title("HotSpot Bounding Boxes")
-            plt.axis('off')
-            plt.show()
+            # plt.figure(figsize=(8, 6))
+            # plt.imshow(cv2.cvtColor(combined_with_boxes, cv2.COLOR_BGR2RGB))
+            # plt.title("HotSpot Bounding Boxes")
+            # plt.axis('off')
+            # plt.show()
 
         # Sort largest-first: biggest anomalies are usually most actionable
         hotspots.sort(key=lambda hs: hs.area, reverse=True)
