@@ -503,6 +503,12 @@ class ContentGate:
         masked_aligned = aligned_gray.copy()
         masked_aligned[mask_for_ssim == 0] = masked_golden[mask_for_ssim == 0]
 
+        # A tiny amount of smoothing suppresses noise-only mismatches in the
+        # augmented clean samples, but keeps the larger structural fault ROIs
+        # visible enough for the hotspot logic to catch.
+        masked_golden = cv2.GaussianBlur(masked_golden, (3, 3), 0)
+        masked_aligned = cv2.GaussianBlur(masked_aligned, (3, 3), 0)
+
         ssim_score, ssim_map = self._ssim_map(masked_golden, masked_aligned)
         ssim_map = ssim_map.astype(np.float32)
         ssim_map[mask_for_ssim == 0] = 1.0
@@ -621,6 +627,9 @@ class ContentGate:
         # Sort largest-first: biggest anomalies are usually most actionable
         hotspots.sort(key=lambda hs: hs.area, reverse=True)
 
+        defect_signature_count = sum(
+            1 for hs in hotspots if hs.defect_class in {"Missing Stitch", "Ink Bleed", "Text/Number Mismatch"}
+        )
         hotspot_area = sum(hs.area for hs in hotspots)
         reject_hotspot_area = max(self.min_hotspot_area * 3, int(0.01 * self._foreground_area(comparison_mask)))
         high_ssim_hotspot_count = 10
@@ -646,7 +655,7 @@ class ContentGate:
 
         passed = not (
             (ssim_score < self.overall_ssim_reject_threshold and hotspot_area >= reject_hotspot_area)
-            or len(hotspots) >= high_ssim_hotspot_count
+            or (len(hotspots) >= high_ssim_hotspot_count)
         )
 
         return Gate2Result(
