@@ -623,6 +623,7 @@ class ContentGate:
 
         hotspot_area = sum(hs.area for hs in hotspots)
         reject_hotspot_area = max(self.min_hotspot_area * 3, int(0.01 * self._foreground_area(comparison_mask)))
+        high_ssim_hotspot_count = 10
 
         if ssim_score < self.overall_ssim_reject_threshold:
             if hotspot_area >= reject_hotspot_area:
@@ -636,10 +637,17 @@ class ContentGate:
                     f"Overall SSIM {ssim_score:.3f} is below threshold, but hotspot evidence is too small "
                     f"({hotspot_area}px < {reject_hotspot_area}px) to reject."
                 )
+        elif len(hotspots) >= high_ssim_hotspot_count:
+            reasons.append(
+                f"High-SSIM sample still has {len(hotspots)} hot spots — likely a real defect cluster."
+            )
         if hotspots:
             reasons.append(f"{len(hotspots)} hot spot(s) require classification.")
 
-        passed = not (ssim_score < self.overall_ssim_reject_threshold and hotspot_area >= reject_hotspot_area)
+        passed = not (
+            (ssim_score < self.overall_ssim_reject_threshold and hotspot_area >= reject_hotspot_area)
+            or len(hotspots) >= high_ssim_hotspot_count
+        )
 
         return Gate2Result(
             passed=passed,

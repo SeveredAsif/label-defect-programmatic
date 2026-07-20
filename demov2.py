@@ -99,32 +99,32 @@ def augment_golden(golden_bgr, seed_text, count=5):
     cx, cy = w / 2.0, h / 2.0
     augmentations = []
 
-    angle = float(rng.uniform(-2.5, 2.5))
-    scale = float(rng.uniform(0.98, 1.02))
+    angle = float(rng.uniform(-1.0, 1.0))
+    scale = float(rng.uniform(0.99, 1.01))
     mat = cv2.getRotationMatrix2D((cx, cy), angle, scale)
-    mat[0, 2] += rng.uniform(-4, 4)
-    mat[1, 2] += rng.uniform(-4, 4)
+    mat[0, 2] += rng.uniform(-2, 2)
+    mat[1, 2] += rng.uniform(-2, 2)
     augmentations.append(("rotate", _apply_affine(golden_bgr, mat)))
 
-    alpha = float(rng.uniform(0.90, 1.10))
-    beta = float(rng.uniform(-14, 14))
+    alpha = float(rng.uniform(0.95, 1.05))
+    beta = float(rng.uniform(-8, 8))
     bright = cv2.convertScaleAbs(golden_bgr, alpha=alpha, beta=beta)
     augmentations.append(("brightness", bright))
 
-    blur_k = int(rng.choice([3, 5]))
+    blur_k = int(rng.choice([3]))
     blurred = cv2.GaussianBlur(golden_bgr, (blur_k, blur_k), 0)
-    noise = rng.normal(0, rng.uniform(2.0, 6.0), golden_bgr.shape).astype(np.int16)
+    noise = rng.normal(0, rng.uniform(1.0, 3.0), golden_bgr.shape).astype(np.int16)
     noisy = np.clip(blurred.astype(np.int16) + noise, 0, 255).astype(np.uint8)
     augmentations.append(("blur_noise", noisy))
 
     src = np.float32([[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]])
     dst = np.float32([
-        [rng.uniform(0, 6), rng.uniform(0, 6)],
-        [w - rng.uniform(0, 6), rng.uniform(0, 6)],
-        [w - rng.uniform(0, 6), h - rng.uniform(0, 6)],
-        [rng.uniform(0, 6), h - rng.uniform(0, 6)],
+        [rng.uniform(0, 2), rng.uniform(0, 2)],
+        [w - rng.uniform(0, 2), rng.uniform(0, 2)],
+        [w - rng.uniform(0, 2), h - rng.uniform(0, 2)],
+        [rng.uniform(0, 2), h - rng.uniform(0, 2)],
     ])
-    dst += rng.uniform(-8, 8, size=(4, 2)).astype(np.float32)
+    dst += rng.uniform(-3, 3, size=(4, 2)).astype(np.float32)
     dst = np.clip(dst, [0, 0], [w - 1, h - 1]).astype(np.float32)
     pm = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(

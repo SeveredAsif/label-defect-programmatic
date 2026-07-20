@@ -2,34 +2,34 @@ SUMMARY
   total_samples: 51
   faulty_samples: 33
   clean_samples: 18
-  TP: 29
+  TP: 32
   TN: 13
   FP: 5
-  FN: 4
-  precision: 0.8529
-  recall: 0.8788
+  FN: 1
+  precision: 0.8649
+  recall: 0.9697
   specificity: 0.7222
-  npv: 0.7647
+  npv: 0.9286
   false_positive_rate: 0.2778
-  false_negative_rate: 0.1212
+  false_negative_rate: 0.0303
 
 STAGE BREAKDOWN
-  TP @ Gate 2: 29
+  TP @ Gate 2: 32
   TN @ PASS: 13
   FP @ Gate 2: 5
-  FN @ PASS: 4
+  FN @ PASS: 1
 
 ======================================================================
 Primark_1
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 132.0 x 689.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8745
   registration matches used: 0
   hot spots found: 12
@@ -45,10 +45,10 @@ VERDICT: PASS
     [9] bbox=(635, 33, 21, 20) area=39 class=Blur conf=0.40
     [10] bbox=(620, 43, 22, 20) area=33 class=Blur conf=0.40
     [11] bbox=(615, 66, 21, 20) area=32 class=Blur conf=0.40
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_1_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_1_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_1_report.png
 
 
 ======================================================================
@@ -110,14 +110,14 @@ Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_3_re
 ======================================================================
 Primark_4
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 125.0 x 692.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8791
   registration matches used: 0
   hot spots found: 11
@@ -132,10 +132,10 @@ VERDICT: PASS
     [8] bbox=(687, 17, 13, 25) area=50 class=Lamination Scuff conf=0.50
     [9] bbox=(171, 133, 28, 12) area=30 class=Lamination Scuff conf=0.50
     [10] bbox=(148, 134, 28, 11) area=25 class=Lamination Scuff conf=0.50
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_4_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_4_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_4_report.png
 
 
 ======================================================================
@@ -251,14 +251,14 @@ Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_8_re
 ======================================================================
 Primark_9
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 131.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8127
   registration matches used: 0
   hot spots found: 11
@@ -273,10 +273,10 @@ VERDICT: PASS
     [8] bbox=(585, 0, 47, 12) area=91 class=Missing Stitch conf=0.45
     [9] bbox=(467, 131, 34, 14) area=78 class=Lamination Scuff conf=0.50
     [10] bbox=(510, 134, 25, 11) area=44 class=Lamination Scuff conf=0.50
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_9_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_9_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_9_report.png
 
 
 ======================================================================
@@ -423,15 +423,14 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.7380
+  SSIM score: 0.7373
   registration matches used: 73
-  hot spots found: 6
-    [0] bbox=(0, 370, 299, 330) area=50741 class=Lamination Scuff conf=0.50
-    [1] bbox=(0, 122, 299, 245) area=34444 class=Missing Stitch conf=0.45
-    [2] bbox=(289, 504, 10, 56) area=80 class=Lamination Scuff conf=0.50
-    [3] bbox=(208, 574, 38, 24) area=64 class=Lamination Scuff conf=0.50
-    [4] bbox=(167, 636, 20, 21) area=35 class=Blur conf=0.40
-    [5] bbox=(221, 539, 21, 20) area=29 class=Lamination Scuff conf=0.50
+  hot spots found: 5
+    [0] bbox=(0, 370, 299, 330) area=51486 class=Lamination Scuff conf=0.50
+    [1] bbox=(0, 122, 299, 245) area=34431 class=Missing Stitch conf=0.45
+    [2] bbox=(167, 636, 20, 21) area=35 class=Blur conf=0.40
+    [3] bbox=(226, 599, 18, 27) area=33 class=Lamination Scuff conf=0.50
+    [4] bbox=(289, 538, 10, 23) area=26 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_13.jpg
 
@@ -449,12 +448,12 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.5807
+  SSIM score: 0.5809
   registration matches used: 83
   hot spots found: 3
-    [0] bbox=(0, 0, 299, 700) area=184990 class=Missing Stitch conf=0.45
-    [1] bbox=(189, 629, 24, 21) area=41 class=Lamination Scuff conf=0.50
-    [2] bbox=(207, 633, 22, 19) area=28 class=Lamination Scuff conf=0.50
+    [0] bbox=(0, 0, 299, 700) area=184218 class=Missing Stitch conf=0.45
+    [1] bbox=(189, 629, 24, 21) area=38 class=Lamination Scuff conf=0.50
+    [2] bbox=(207, 633, 22, 19) area=26 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_14.jpg
 
@@ -538,29 +537,31 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.7001
+  SSIM score: 0.6984
   registration matches used: 46
-  hot spots found: 20
-    [0] bbox=(17, 2, 282, 438) area=55150 class=Missing Stitch conf=0.45
-    [1] bbox=(127, 467, 127, 182) area=5741 class=Lamination Scuff conf=0.50
-    [2] bbox=(108, 397, 78, 91) area=2169 class=Lamination Scuff conf=0.50
-    [3] bbox=(270, 447, 29, 177) area=1952 class=Missing Stitch conf=0.45
-    [4] bbox=(20, 516, 50, 46) area=636 class=Missing Stitch conf=0.45
-    [5] bbox=(19, 81, 26, 42) area=259 class=Missing Stitch conf=0.45
+  hot spots found: 22
+    [0] bbox=(17, 2, 282, 438) area=55281 class=Missing Stitch conf=0.45
+    [1] bbox=(127, 467, 128, 182) area=5700 class=Lamination Scuff conf=0.50
+    [2] bbox=(107, 397, 79, 91) area=2207 class=Lamination Scuff conf=0.50
+    [3] bbox=(272, 447, 27, 173) area=1947 class=Missing Stitch conf=0.45
+    [4] bbox=(19, 501, 51, 62) area=849 class=Missing Stitch conf=0.45
+    [5] bbox=(19, 82, 27, 41) area=256 class=Missing Stitch conf=0.45
     [6] bbox=(127, 621, 26, 27) area=98 class=Missing Stitch conf=0.45
-    [7] bbox=(18, 284, 23, 34) area=84 class=Missing Stitch conf=0.45
-    [8] bbox=(69, 582, 23, 26) area=69 class=Lamination Scuff conf=0.50
+    [7] bbox=(18, 284, 22, 34) area=83 class=Missing Stitch conf=0.45
+    [8] bbox=(69, 582, 23, 26) area=71 class=Lamination Scuff conf=0.50
     [9] bbox=(19, 215, 18, 30) area=50 class=Missing Stitch conf=0.45
-    [10] bbox=(140, 602, 24, 23) area=38 class=Lamination Scuff conf=0.50
-    [11] bbox=(38, 373, 23, 19) area=37 class=Lamination Scuff conf=0.50
-    [12] bbox=(75, 371, 18, 27) area=37 class=Lamination Scuff conf=0.50
-    [13] bbox=(129, 552, 19, 21) area=36 class=Lamination Scuff conf=0.50
-    [14] bbox=(185, 495, 20, 22) area=35 class=Lamination Scuff conf=0.50
-    [15] bbox=(50, 589, 22, 20) area=34 class=Lamination Scuff conf=0.50
-    [16] bbox=(116, 361, 22, 23) area=34 class=Lamination Scuff conf=0.50
-    [17] bbox=(103, 410, 24, 24) area=32 class=Lamination Scuff conf=0.50
-    [18] bbox=(241, 424, 19, 22) area=29 class=Lamination Scuff conf=0.50
-    [19] bbox=(26, 246, 18, 21) area=27 class=Missing Stitch conf=0.45
+    [10] bbox=(140, 602, 24, 26) area=48 class=Lamination Scuff conf=0.50
+    [11] bbox=(50, 588, 22, 21) area=38 class=Lamination Scuff conf=0.50
+    [12] bbox=(38, 373, 23, 19) area=37 class=Lamination Scuff conf=0.50
+    [13] bbox=(54, 492, 19, 20) area=34 class=Lamination Scuff conf=0.50
+    [14] bbox=(75, 371, 18, 27) area=34 class=Lamination Scuff conf=0.50
+    [15] bbox=(185, 495, 20, 20) area=32 class=Lamination Scuff conf=0.50
+    [16] bbox=(103, 410, 24, 24) area=32 class=Lamination Scuff conf=0.50
+    [17] bbox=(129, 552, 19, 21) area=31 class=Lamination Scuff conf=0.50
+    [18] bbox=(25, 246, 19, 21) area=30 class=Missing Stitch conf=0.45
+    [19] bbox=(241, 424, 19, 22) area=29 class=Lamination Scuff conf=0.50
+    [20] bbox=(30, 71, 20, 19) area=27 class=Lamination Scuff conf=0.50
+    [21] bbox=(110, 488, 19, 21) area=25 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_18.jpg
 
@@ -601,26 +602,27 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.7485
+  SSIM score: 0.7482
   registration matches used: 77
-  hot spots found: 17
-    [0] bbox=(0, 128, 299, 460) area=56914 class=Missing Stitch conf=0.45
-    [1] bbox=(12, 509, 275, 191) area=10090 class=Lamination Scuff conf=0.50
-    [2] bbox=(213, 351, 86, 333) area=3923 class=Lamination Scuff conf=0.50
-    [3] bbox=(209, 516, 50, 89) area=1106 class=Lamination Scuff conf=0.50
-    [4] bbox=(187, 389, 41, 52) area=364 class=Lamination Scuff conf=0.50
-    [5] bbox=(176, 325, 49, 32) area=347 class=Lamination Scuff conf=0.50
-    [6] bbox=(0, 611, 22, 74) area=325 class=Lamination Scuff conf=0.50
-    [7] bbox=(0, 581, 30, 31) area=207 class=Lamination Scuff conf=0.50
-    [8] bbox=(130, 338, 44, 24) area=135 class=Lamination Scuff conf=0.50
-    [9] bbox=(214, 481, 26, 35) area=113 class=Lamination Scuff conf=0.50
-    [10] bbox=(29, 594, 23, 31) area=82 class=Lamination Scuff conf=0.50
-    [11] bbox=(198, 509, 28, 24) area=58 class=Lamination Scuff conf=0.50
-    [12] bbox=(204, 370, 22, 21) area=54 class=Lamination Scuff conf=0.50
-    [13] bbox=(193, 550, 21, 22) area=53 class=Lamination Scuff conf=0.50
-    [14] bbox=(52, 580, 21, 29) area=51 class=Lamination Scuff conf=0.50
-    [15] bbox=(31, 555, 22, 21) area=35 class=Lamination Scuff conf=0.50
+  hot spots found: 18
+    [0] bbox=(0, 128, 299, 460) area=59629 class=Missing Stitch conf=0.45
+    [1] bbox=(12, 509, 275, 191) area=9529 class=Lamination Scuff conf=0.50
+    [2] bbox=(213, 351, 86, 333) area=3793 class=Lamination Scuff conf=0.50
+    [3] bbox=(208, 516, 51, 89) area=1107 class=Lamination Scuff conf=0.50
+    [4] bbox=(187, 387, 41, 54) area=366 class=Lamination Scuff conf=0.50
+    [5] bbox=(176, 325, 49, 32) area=358 class=Lamination Scuff conf=0.50
+    [6] bbox=(0, 611, 22, 74) area=326 class=Lamination Scuff conf=0.50
+    [7] bbox=(188, 599, 46, 52) area=304 class=Lamination Scuff conf=0.50
+    [8] bbox=(0, 581, 52, 44) area=301 class=Lamination Scuff conf=0.50
+    [9] bbox=(126, 338, 48, 24) area=129 class=Lamination Scuff conf=0.50
+    [10] bbox=(214, 481, 26, 35) area=93 class=Lamination Scuff conf=0.50
+    [11] bbox=(52, 580, 21, 29) area=69 class=Lamination Scuff conf=0.50
+    [12] bbox=(198, 510, 28, 22) area=55 class=Lamination Scuff conf=0.50
+    [13] bbox=(204, 370, 22, 23) area=55 class=Lamination Scuff conf=0.50
+    [14] bbox=(193, 550, 21, 22) area=54 class=Lamination Scuff conf=0.50
+    [15] bbox=(31, 555, 22, 21) area=34 class=Lamination Scuff conf=0.50
     [16] bbox=(102, 496, 23, 19) area=33 class=Lamination Scuff conf=0.50
+    [17] bbox=(192, 444, 19, 20) area=26 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_2.jpg
 
@@ -659,35 +661,38 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.6901
+  SSIM score: 0.6911
   registration matches used: 113
-  hot spots found: 26
-    [0] bbox=(0, 40, 299, 660) area=92256 class=Missing Stitch conf=0.45
+  hot spots found: 29
+    [0] bbox=(0, 40, 299, 660) area=97477 class=Missing Stitch conf=0.45
     [1] bbox=(9, 670, 48, 30) area=453 class=Lamination Scuff conf=0.50
-    [2] bbox=(123, 578, 67, 73) area=386 class=Lamination Scuff conf=0.50
-    [3] bbox=(189, 387, 38, 37) area=343 class=Lamination Scuff conf=0.50
-    [4] bbox=(205, 679, 34, 21) area=234 class=Lamination Scuff conf=0.50
+    [2] bbox=(123, 578, 67, 73) area=349 class=Lamination Scuff conf=0.50
+    [3] bbox=(189, 387, 37, 37) area=333 class=Lamination Scuff conf=0.50
+    [4] bbox=(205, 680, 34, 20) area=234 class=Lamination Scuff conf=0.50
     [5] bbox=(241, 355, 35, 42) area=203 class=Lamination Scuff conf=0.50
-    [6] bbox=(222, 448, 38, 35) area=197 class=Lamination Scuff conf=0.50
-    [7] bbox=(202, 514, 42, 44) area=196 class=Lamination Scuff conf=0.50
-    [8] bbox=(97, 683, 39, 17) area=182 class=Lamination Scuff conf=0.50
-    [9] bbox=(185, 611, 44, 35) area=133 class=Lamination Scuff conf=0.50
-    [10] bbox=(134, 558, 50, 27) area=118 class=Lamination Scuff conf=0.50
-    [11] bbox=(30, 589, 39, 29) area=103 class=Lamination Scuff conf=0.50
-    [12] bbox=(85, 563, 29, 32) area=103 class=Lamination Scuff conf=0.50
-    [13] bbox=(239, 492, 37, 29) area=94 class=Lamination Scuff conf=0.50
-    [14] bbox=(82, 600, 37, 22) area=93 class=Lamination Scuff conf=0.50
-    [15] bbox=(63, 681, 25, 19) area=92 class=Lamination Scuff conf=0.50
-    [16] bbox=(204, 559, 37, 27) area=79 class=Lamination Scuff conf=0.50
-    [17] bbox=(176, 542, 26, 32) area=61 class=Lamination Scuff conf=0.50
-    [18] bbox=(210, 473, 21, 25) area=44 class=Lamination Scuff conf=0.50
-    [19] bbox=(255, 587, 23, 21) area=40 class=Lamination Scuff conf=0.50
-    [20] bbox=(182, 663, 20, 21) area=37 class=Lamination Scuff conf=0.50
-    [21] bbox=(0, 665, 14, 21) area=35 class=Lamination Scuff conf=0.50
-    [22] bbox=(119, 590, 22, 23) area=34 class=Lamination Scuff conf=0.50
-    [23] bbox=(250, 475, 21, 21) area=34 class=Lamination Scuff conf=0.50
-    [24] bbox=(223, 583, 19, 21) area=29 class=Lamination Scuff conf=0.50
-    [25] bbox=(166, 476, 19, 19) area=28 class=Lamination Scuff conf=0.50
+    [6] bbox=(222, 448, 38, 35) area=193 class=Lamination Scuff conf=0.50
+    [7] bbox=(97, 683, 39, 17) area=182 class=Lamination Scuff conf=0.50
+    [8] bbox=(186, 614, 32, 32) area=121 class=Lamination Scuff conf=0.50
+    [9] bbox=(85, 563, 29, 32) area=103 class=Lamination Scuff conf=0.50
+    [10] bbox=(30, 589, 38, 28) area=95 class=Lamination Scuff conf=0.50
+    [11] bbox=(134, 558, 41, 27) area=93 class=Lamination Scuff conf=0.50
+    [12] bbox=(63, 681, 25, 19) area=92 class=Lamination Scuff conf=0.50
+    [13] bbox=(83, 600, 36, 22) area=92 class=Lamination Scuff conf=0.50
+    [14] bbox=(202, 514, 38, 25) area=73 class=Lamination Scuff conf=0.50
+    [15] bbox=(253, 496, 23, 25) area=61 class=Lamination Scuff conf=0.50
+    [16] bbox=(236, 557, 33, 23) area=59 class=Lamination Scuff conf=0.50
+    [17] bbox=(176, 542, 26, 32) area=58 class=Lamination Scuff conf=0.50
+    [18] bbox=(204, 559, 23, 20) area=53 class=Lamination Scuff conf=0.50
+    [19] bbox=(204, 536, 31, 22) area=40 class=Lamination Scuff conf=0.50
+    [20] bbox=(182, 663, 20, 21) area=36 class=Lamination Scuff conf=0.50
+    [21] bbox=(255, 588, 23, 20) area=36 class=Lamination Scuff conf=0.50
+    [22] bbox=(0, 665, 14, 21) area=35 class=Lamination Scuff conf=0.50
+    [23] bbox=(119, 590, 22, 23) area=34 class=Lamination Scuff conf=0.50
+    [24] bbox=(210, 474, 20, 24) area=33 class=Lamination Scuff conf=0.50
+    [25] bbox=(58, 552, 26, 22) area=29 class=Lamination Scuff conf=0.50
+    [26] bbox=(250, 475, 21, 20) area=28 class=Lamination Scuff conf=0.50
+    [27] bbox=(223, 585, 19, 18) area=26 class=Lamination Scuff conf=0.50
+    [28] bbox=(166, 476, 19, 19) area=25 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_3.jpg
 
@@ -726,21 +731,21 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.6754
+  SSIM score: 0.6761
   registration matches used: 91
   hot spots found: 13
-    [0] bbox=(0, 17, 289, 652) area=96107 class=Missing Stitch conf=0.45
-    [1] bbox=(96, 363, 88, 143) area=3055 class=Lamination Scuff conf=0.50
-    [2] bbox=(33, 482, 76, 96) area=947 class=Lamination Scuff conf=0.50
-    [3] bbox=(52, 428, 68, 54) area=660 class=Lamination Scuff conf=0.50
-    [4] bbox=(117, 500, 36, 36) area=215 class=Lamination Scuff conf=0.50
-    [5] bbox=(79, 531, 34, 39) area=130 class=Lamination Scuff conf=0.50
-    [6] bbox=(69, 563, 28, 40) area=128 class=Lamination Scuff conf=0.50
-    [7] bbox=(175, 517, 43, 29) area=95 class=Lamination Scuff conf=0.50
-    [8] bbox=(146, 522, 24, 31) area=71 class=Lamination Scuff conf=0.50
-    [9] bbox=(119, 575, 27, 27) area=62 class=Lamination Scuff conf=0.50
-    [10] bbox=(132, 602, 27, 21) area=47 class=Lamination Scuff conf=0.50
-    [11] bbox=(129, 551, 19, 22) area=35 class=Lamination Scuff conf=0.50
+    [0] bbox=(0, 17, 289, 652) area=94306 class=Missing Stitch conf=0.45
+    [1] bbox=(96, 363, 88, 143) area=3100 class=Lamination Scuff conf=0.50
+    [2] bbox=(33, 482, 80, 80) area=776 class=Lamination Scuff conf=0.50
+    [3] bbox=(25, 388, 60, 57) area=729 class=Lamination Scuff conf=0.50
+    [4] bbox=(52, 428, 68, 54) area=641 class=Lamination Scuff conf=0.50
+    [5] bbox=(104, 500, 49, 36) area=326 class=Lamination Scuff conf=0.50
+    [6] bbox=(69, 563, 27, 40) area=138 class=Lamination Scuff conf=0.50
+    [7] bbox=(175, 517, 43, 29) area=132 class=Lamination Scuff conf=0.50
+    [8] bbox=(79, 536, 34, 34) area=91 class=Lamination Scuff conf=0.50
+    [9] bbox=(146, 525, 24, 28) area=66 class=Lamination Scuff conf=0.50
+    [10] bbox=(119, 574, 27, 28) area=64 class=Lamination Scuff conf=0.50
+    [11] bbox=(134, 601, 25, 22) area=37 class=Lamination Scuff conf=0.50
     [12] bbox=(35, 603, 22, 22) area=31 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_5.jpg
@@ -759,25 +764,20 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.7539
+  SSIM score: 0.6089
   registration matches used: 98
-  hot spots found: 16
-    [0] bbox=(0, 132, 299, 251) area=56283 class=Missing Stitch conf=0.45
-    [1] bbox=(0, 395, 227, 249) area=16388 class=Lamination Scuff conf=0.50
-    [2] bbox=(0, 656, 256, 44) area=3968 class=Missing Stitch conf=0.45
-    [3] bbox=(251, 554, 48, 146) area=756 class=Lamination Scuff conf=0.50
-    [4] bbox=(176, 597, 67, 49) area=732 class=Lamination Scuff conf=0.50
-    [5] bbox=(266, 404, 33, 89) area=726 class=Lamination Scuff conf=0.50
-    [6] bbox=(127, 545, 45, 36) area=276 class=Lamination Scuff conf=0.50
-    [7] bbox=(196, 501, 64, 34) area=249 class=Lamination Scuff conf=0.50
-    [8] bbox=(198, 457, 29, 35) area=180 class=Lamination Scuff conf=0.50
-    [9] bbox=(237, 426, 32, 32) area=153 class=Lamination Scuff conf=0.50
-    [10] bbox=(0, 641, 35, 29) area=119 class=Lamination Scuff conf=0.50
-    [11] bbox=(199, 404, 25, 27) area=83 class=Lamination Scuff conf=0.50
-    [12] bbox=(80, 547, 30, 24) area=75 class=Lamination Scuff conf=0.50
-    [13] bbox=(289, 504, 10, 44) area=73 class=Lamination Scuff conf=0.50
-    [14] bbox=(217, 570, 24, 22) area=46 class=Lamination Scuff conf=0.50
-    [15] bbox=(261, 587, 24, 20) area=36 class=Lamination Scuff conf=0.50
+  hot spots found: 11
+    [0] bbox=(0, 0, 299, 700) area=111188 class=Missing Stitch conf=0.45
+    [1] bbox=(171, 295, 128, 159) area=6789 class=Lamination Scuff conf=0.50
+    [2] bbox=(184, 530, 115, 83) area=2859 class=Lamination Scuff conf=0.50
+    [3] bbox=(194, 445, 72, 91) area=1514 class=Lamination Scuff conf=0.50
+    [4] bbox=(161, 662, 138, 37) area=1264 class=Missing Stitch conf=0.45
+    [5] bbox=(264, 408, 35, 63) area=319 class=Missing Stitch conf=0.45
+    [6] bbox=(281, 463, 18, 21) area=64 class=Missing Stitch conf=0.45
+    [7] bbox=(285, 525, 14, 21) area=41 class=Missing Stitch conf=0.45
+    [8] bbox=(283, 278, 16, 20) area=40 class=Missing Stitch conf=0.45
+    [9] bbox=(113, 658, 20, 19) area=37 class=Lamination Scuff conf=0.50
+    [10] bbox=(286, 585, 13, 21) area=35 class=Missing Stitch conf=0.45
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_6.jpg
 
@@ -795,24 +795,24 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.6864
+  SSIM score: 0.6862
   registration matches used: 80
   hot spots found: 15
-    [0] bbox=(6, 7, 293, 693) area=101354 class=Missing Stitch conf=0.45
-    [1] bbox=(206, 574, 44, 39) area=355 class=Lamination Scuff conf=0.50
-    [2] bbox=(271, 448, 28, 58) area=338 class=Missing Stitch conf=0.45
-    [3] bbox=(73, 577, 35, 31) area=164 class=Lamination Scuff conf=0.50
-    [4] bbox=(165, 554, 36, 37) area=157 class=Lamination Scuff conf=0.50
-    [5] bbox=(207, 607, 25, 31) area=128 class=Lamination Scuff conf=0.50
-    [6] bbox=(169, 95, 43, 26) area=126 class=Lamination Scuff conf=0.50
-    [7] bbox=(283, 510, 16, 35) area=122 class=Missing Stitch conf=0.45
-    [8] bbox=(252, 118, 27, 30) area=104 class=Lamination Scuff conf=0.50
-    [9] bbox=(98, 68, 29, 25) area=93 class=Lamination Scuff conf=0.50
-    [10] bbox=(134, 596, 25, 25) area=86 class=Lamination Scuff conf=0.50
-    [11] bbox=(148, 577, 24, 24) area=78 class=Lamination Scuff conf=0.50
-    [12] bbox=(229, 503, 31, 28) area=50 class=Lamination Scuff conf=0.50
-    [13] bbox=(209, 550, 29, 29) area=49 class=Lamination Scuff conf=0.50
-    [14] bbox=(250, 536, 19, 21) area=27 class=Lamination Scuff conf=0.50
+    [0] bbox=(6, 7, 293, 693) area=108194 class=Missing Stitch conf=0.45
+    [1] bbox=(271, 448, 28, 58) area=338 class=Missing Stitch conf=0.45
+    [2] bbox=(206, 574, 44, 39) area=314 class=Lamination Scuff conf=0.50
+    [3] bbox=(73, 577, 36, 31) area=189 class=Lamination Scuff conf=0.50
+    [4] bbox=(169, 95, 43, 26) area=146 class=Lamination Scuff conf=0.50
+    [5] bbox=(283, 510, 16, 35) area=133 class=Missing Stitch conf=0.45
+    [6] bbox=(248, 103, 31, 46) area=133 class=Lamination Scuff conf=0.50
+    [7] bbox=(207, 607, 25, 31) area=127 class=Lamination Scuff conf=0.50
+    [8] bbox=(148, 575, 24, 26) area=92 class=Lamination Scuff conf=0.50
+    [9] bbox=(134, 596, 26, 25) area=90 class=Lamination Scuff conf=0.50
+    [10] bbox=(209, 550, 29, 28) area=50 class=Lamination Scuff conf=0.50
+    [11] bbox=(103, 69, 30, 20) area=45 class=Lamination Scuff conf=0.50
+    [12] bbox=(250, 536, 19, 21) area=27 class=Lamination Scuff conf=0.50
+    [13] bbox=(232, 503, 19, 23) area=27 class=Lamination Scuff conf=0.50
+    [14] bbox=(169, 637, 19, 18) area=25 class=Lamination Scuff conf=0.50
 expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=label_dataset\label_dataset\zara\zara_faulty\CamScanner 07-04-2026 12.23_7.jpg
 
@@ -978,15 +978,17 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.8663
+  SSIM score: 0.8654
   registration matches used: 0
-  hot spots found: 6
-    [0] bbox=(252, 22, 216, 46) area=4218 class=Blur conf=0.40
-    [1] bbox=(0, 0, 300, 145) area=3769 class=Missing Stitch conf=0.45
-    [2] bbox=(186, 0, 345, 18) area=2452 class=Blur conf=0.40
-    [3] bbox=(313, 106, 162, 39) area=2387 class=Blur conf=0.40
-    [4] bbox=(670, 0, 30, 145) area=2276 class=Missing Stitch conf=0.45
-    [5] bbox=(56, 33, 22, 19) area=33 class=Missing Stitch conf=0.45
+  hot spots found: 8
+    [0] bbox=(240, 0, 460, 145) area=5168 class=Missing Stitch conf=0.45
+    [1] bbox=(339, 105, 303, 40) area=3606 class=Missing Stitch conf=0.45
+    [2] bbox=(250, 22, 158, 45) area=2898 class=Blur conf=0.40
+    [3] bbox=(0, 0, 271, 145) area=2678 class=Missing Stitch conf=0.45
+    [4] bbox=(399, 24, 72, 42) area=1083 class=Blur conf=0.40
+    [5] bbox=(50, 38, 42, 45) area=504 class=Lamination Scuff conf=0.50
+    [6] bbox=(30, 4, 30, 32) area=111 class=Lamination Scuff conf=0.50
+    [7] bbox=(60, 3, 22, 19) area=37 class=Missing Stitch conf=0.45
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=evaluation_results\augmented_goldens\Primark\golden__01_rotate.png
 
@@ -1004,7 +1006,7 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.9995
+  SSIM score: 0.9994
   registration matches used: 0
   hot spots found: 0
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
@@ -1024,17 +1026,11 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.9450
+  SSIM score: 0.9683
   registration matches used: 0
-  hot spots found: 8
-    [0] bbox=(460, 0, 240, 145) area=1426 class=Missing Stitch conf=0.45
-    [1] bbox=(259, 0, 237, 13) area=349 class=Missing Stitch conf=0.45
-    [2] bbox=(485, 0, 85, 12) area=176 class=Blur conf=0.40
-    [3] bbox=(0, 35, 14, 69) area=132 class=Missing Stitch conf=0.45
-    [4] bbox=(0, 114, 14, 31) area=99 class=Blur conf=0.40
-    [5] bbox=(218, 136, 60, 9) area=38 class=Lamination Scuff conf=0.50
-    [6] bbox=(445, 134, 26, 11) area=26 class=Blur conf=0.40
-    [7] bbox=(240, 0, 29, 12) area=26 class=Blur conf=0.40
+  hot spots found: 2
+    [0] bbox=(590, 135, 50, 10) area=40 class=Blur conf=0.40
+    [1] bbox=(483, 133, 37, 12) area=40 class=Blur conf=0.40
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=evaluation_results\augmented_goldens\Primark\golden__03_blur_noise.png
 
@@ -1052,14 +1048,13 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.9212
+  SSIM score: 0.9122
   registration matches used: 0
-  hot spots found: 5
-    [0] bbox=(243, 0, 457, 145) area=6875 class=Missing Stitch conf=0.45
-    [1] bbox=(0, 0, 155, 145) area=2586 class=Missing Stitch conf=0.45
-    [2] bbox=(395, 130, 26, 15) area=62 class=Blur conf=0.40
-    [3] bbox=(356, 130, 25, 15) area=62 class=Blur conf=0.40
-    [4] bbox=(155, 0, 47, 10) area=33 class=Blur conf=0.40
+  hot spots found: 4
+    [0] bbox=(164, 0, 536, 145) area=9915 class=Missing Stitch conf=0.45
+    [1] bbox=(268, 22, 145, 43) area=2015 class=Blur conf=0.40
+    [2] bbox=(133, 0, 79, 11) area=164 class=Blur conf=0.40
+    [3] bbox=(414, 37, 22, 22) area=42 class=Text/Number Mismatch conf=0.55
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=evaluation_results\augmented_goldens\Primark\golden__04_perspective.png
 
@@ -1077,10 +1072,10 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.9487
+  SSIM score: 0.9490
   registration matches used: 0
   hot spots found: 4
-    [0] bbox=(560, 124, 140, 21) area=532 class=Blur conf=0.40
+    [0] bbox=(560, 124, 140, 21) area=529 class=Blur conf=0.40
     [1] bbox=(355, 0, 70, 12) area=183 class=Blur conf=0.40
     [2] bbox=(462, 0, 40, 12) area=49 class=Blur conf=0.40
     [3] bbox=(538, 133, 33, 12) area=45 class=Blur conf=0.40
@@ -1121,26 +1116,27 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.7771
-  registration matches used: 324
-  hot spots found: 17
-    [0] bbox=(0, 0, 299, 388) area=26301 class=Missing Stitch conf=0.45
-    [1] bbox=(0, 449, 299, 251) area=11514 class=Lamination Scuff conf=0.50
-    [2] bbox=(201, 518, 86, 68) area=619 class=Lamination Scuff conf=0.50
-    [3] bbox=(121, 584, 48, 47) area=514 class=Lamination Scuff conf=0.50
-    [4] bbox=(0, 395, 35, 73) area=452 class=Lamination Scuff conf=0.50
-    [5] bbox=(204, 553, 43, 49) area=344 class=Lamination Scuff conf=0.50
-    [6] bbox=(207, 595, 38, 40) area=235 class=Lamination Scuff conf=0.50
-    [7] bbox=(133, 441, 45, 30) area=218 class=Lamination Scuff conf=0.50
-    [8] bbox=(285, 494, 14, 67) area=182 class=Lamination Scuff conf=0.50
-    [9] bbox=(33, 592, 42, 30) area=176 class=Lamination Scuff conf=0.50
-    [10] bbox=(134, 418, 40, 25) area=152 class=Lamination Scuff conf=0.50
-    [11] bbox=(175, 519, 37, 41) area=134 class=Lamination Scuff conf=0.50
-    [12] bbox=(217, 455, 34, 37) area=117 class=Lamination Scuff conf=0.50
-    [13] bbox=(254, 83, 27, 25) area=69 class=Lamination Scuff conf=0.50
-    [14] bbox=(150, 545, 24, 25) area=58 class=Lamination Scuff conf=0.50
-    [15] bbox=(227, 500, 25, 30) area=54 class=Lamination Scuff conf=0.50
-    [16] bbox=(182, 549, 18, 23) area=25 class=Lamination Scuff conf=0.50
+  SSIM score: 0.8556
+  registration matches used: 342
+  hot spots found: 18
+    [0] bbox=(0, 0, 299, 397) area=5683 class=Lamination Scuff conf=0.50
+    [1] bbox=(0, 621, 299, 79) area=3780 class=Lamination Scuff conf=0.50
+    [2] bbox=(55, 517, 66, 105) area=2246 class=Lamination Scuff conf=0.50
+    [3] bbox=(205, 554, 41, 46) area=436 class=Lamination Scuff conf=0.50
+    [4] bbox=(273, 495, 26, 123) area=374 class=Lamination Scuff conf=0.50
+    [5] bbox=(131, 512, 34, 30) area=120 class=Lamination Scuff conf=0.50
+    [6] bbox=(137, 444, 39, 25) area=115 class=Lamination Scuff conf=0.50
+    [7] bbox=(58, 492, 36, 27) area=112 class=Lamination Scuff conf=0.50
+    [8] bbox=(129, 598, 32, 39) area=108 class=Lamination Scuff conf=0.50
+    [9] bbox=(1, 620, 27, 32) area=75 class=Lamination Scuff conf=0.50
+    [10] bbox=(136, 419, 34, 20) area=67 class=Lamination Scuff conf=0.50
+    [11] bbox=(182, 539, 25, 36) area=66 class=Lamination Scuff conf=0.50
+    [12] bbox=(175, 522, 21, 24) area=49 class=Lamination Scuff conf=0.50
+    [13] bbox=(50, 594, 23, 21) area=48 class=Lamination Scuff conf=0.50
+    [14] bbox=(225, 456, 25, 22) area=39 class=Lamination Scuff conf=0.50
+    [15] bbox=(214, 523, 21, 21) area=37 class=Lamination Scuff conf=0.50
+    [16] bbox=(113, 660, 20, 19) area=27 class=Lamination Scuff conf=0.50
+    [17] bbox=(152, 551, 18, 20) area=25 class=Lamination Scuff conf=0.50
 expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=evaluation_results\augmented_goldens\zara\golden__01_rotate.png
 
@@ -1158,9 +1154,10 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.9969
-  registration matches used: 444
-  hot spots found: 0
+  SSIM score: 0.9983
+  registration matches used: 460
+  hot spots found: 1
+    [0] bbox=(272, 690, 23, 10) area=26 class=Lamination Scuff conf=0.50
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=evaluation_results\augmented_goldens\zara\golden__02_brightness.png
 
@@ -1170,68 +1167,37 @@ Saved visualization -> evaluation_results\all_case_reports\TN_PASS_zara__aug_02_
 ======================================================================
 zara__aug_03_blur_noise
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 298.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
-  SSIM score: 0.8621
-  registration matches used: 137
-  hot spots found: 6
-    [0] bbox=(0, 0, 299, 183) area=3068 class=Lamination Scuff conf=0.50
-    [1] bbox=(163, 686, 136, 14) area=360 class=Lamination Scuff conf=0.50
-    [2] bbox=(11, 686, 96, 14) area=213 class=Lamination Scuff conf=0.50
-    [3] bbox=(111, 686, 49, 14) area=110 class=Lamination Scuff conf=0.50
-    [4] bbox=(0, 176, 12, 47) area=93 class=Lamination Scuff conf=0.50
-    [5] bbox=(0, 371, 11, 42) area=73 class=Lamination Scuff conf=0.50
-expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
+  passed: False
+  SSIM score: 0.8152
+  registration matches used: 271
+  hot spots found: 11
+    [0] bbox=(0, 0, 215, 117) area=7541 class=Lamination Scuff conf=0.50
+    [1] bbox=(0, 301, 25, 399) area=2732 class=Missing Stitch conf=0.45
+    [2] bbox=(94, 685, 205, 15) area=678 class=Missing Stitch conf=0.45
+    [3] bbox=(267, 0, 32, 38) area=275 class=Missing Stitch conf=0.45
+    [4] bbox=(223, 0, 42, 31) area=210 class=Lamination Scuff conf=0.50
+    [5] bbox=(20, 60, 28, 26) area=92 class=Lamination Scuff conf=0.50
+    [6] bbox=(287, 44, 12, 74) area=70 class=Blur conf=0.40
+    [7] bbox=(131, 423, 21, 35) area=66 class=Lamination Scuff conf=0.50
+    [8] bbox=(131, 553, 28, 27) area=65 class=Lamination Scuff conf=0.50
+    [9] bbox=(160, 431, 19, 30) area=39 class=Lamination Scuff conf=0.50
+    [10] bbox=(88, 577, 19, 29) area=30 class=Lamination Scuff conf=0.50
+expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=evaluation_results\augmented_goldens\zara\golden__03_blur_noise.png
 
-Saved visualization -> evaluation_results\all_case_reports\TN_PASS_zara__aug_03_blur_noise_report.png
+Saved visualization -> evaluation_results\all_case_reports\FP_Gate2_zara__aug_03_blur_noise_report.png
 
 
 ======================================================================
 zara__aug_04_perspective
 ======================================================================
-VERDICT: REJECT_GATE2
--- Gate 1 (Structural) --
-  passed: True
-  size(px): 298.0 x 684.0
-  skew angle: 0.00 deg
-  components found: 1
--- Gate 2 (Content) --
-  passed: False
-  SSIM score: 0.6782
-  registration matches used: 0
-  hot spots found: 16
-    [0] bbox=(0, 0, 299, 700) area=73241 class=Lamination Scuff conf=0.50
-    [1] bbox=(29, 239, 244, 86) area=9310 class=Blur conf=0.40
-    [2] bbox=(120, 414, 65, 61) area=1587 class=Missing Stitch conf=0.45
-    [3] bbox=(43, 466, 68, 90) area=841 class=Lamination Scuff conf=0.50
-    [4] bbox=(128, 510, 50, 33) area=224 class=Lamination Scuff conf=0.50
-    [5] bbox=(191, 553, 53, 35) area=195 class=Lamination Scuff conf=0.50
-    [6] bbox=(208, 594, 37, 37) area=158 class=Lamination Scuff conf=0.50
-    [7] bbox=(107, 495, 22, 40) area=76 class=Lamination Scuff conf=0.50
-    [8] bbox=(63, 376, 31, 25) area=75 class=Lamination Scuff conf=0.50
-    [9] bbox=(237, 232, 24, 27) area=61 class=Lamination Scuff conf=0.50
-    [10] bbox=(232, 391, 24, 31) area=60 class=Lamination Scuff conf=0.50
-    [11] bbox=(54, 420, 24, 23) area=46 class=Lamination Scuff conf=0.50
-    [12] bbox=(116, 402, 19, 22) area=37 class=Lamination Scuff conf=0.50
-    [13] bbox=(213, 436, 17, 26) area=34 class=Lamination Scuff conf=0.50
-    [14] bbox=(34, 518, 25, 20) area=27 class=Lamination Scuff conf=0.50
-    [15] bbox=(243, 513, 18, 21) area=25 class=Lamination Scuff conf=0.50
-expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
-source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=evaluation_results\augmented_goldens\zara\golden__04_perspective.png
-
-Saved visualization -> evaluation_results\all_case_reports\FP_Gate2_zara__aug_04_perspective_report.png
-
-
-======================================================================
-zara__aug_05_color_shift
-======================================================================
 VERDICT: PASS
 -- Gate 1 (Structural) --
   passed: True
@@ -1240,22 +1206,42 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.8219
-  registration matches used: 378
-  hot spots found: 9
-    [0] bbox=(0, 632, 299, 68) area=3903 class=Lamination Scuff conf=0.50
-    [1] bbox=(201, 560, 78, 80) area=1328 class=Lamination Scuff conf=0.50
-    [2] bbox=(0, 0, 13, 145) area=462 class=Blur conf=0.40
-    [3] bbox=(122, 598, 45, 36) area=202 class=Lamination Scuff conf=0.50
-    [4] bbox=(72, 605, 26, 49) area=141 class=Lamination Scuff conf=0.50
-    [5] bbox=(263, 589, 24, 37) area=106 class=Lamination Scuff conf=0.50
-    [6] bbox=(0, 140, 10, 45) area=79 class=Blur conf=0.40
-    [7] bbox=(189, 629, 22, 22) area=55 class=Lamination Scuff conf=0.50
-    [8] bbox=(182, 664, 19, 19) area=27 class=Lamination Scuff conf=0.50
+  SSIM score: 0.9170
+  registration matches used: 387
+  hot spots found: 2
+    [0] bbox=(0, 266, 299, 434) area=5198 class=Lamination Scuff conf=0.50
+    [1] bbox=(220, 0, 76, 18) area=455 class=Missing Stitch conf=0.45
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
+source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=evaluation_results\augmented_goldens\zara\golden__04_perspective.png
+
+Saved visualization -> evaluation_results\all_case_reports\TN_PASS_zara__aug_04_perspective_report.png
+
+
+======================================================================
+zara__aug_05_color_shift
+======================================================================
+VERDICT: REJECT_GATE2
+-- Gate 1 (Structural) --
+  passed: True
+  size(px): 298.0 x 699.0
+  skew angle: 0.00 deg
+  components found: 1
+-- Gate 2 (Content) --
+  passed: False
+  SSIM score: 0.7904
+  registration matches used: 376
+  hot spots found: 7
+    [0] bbox=(0, 506, 299, 194) area=25973 class=Lamination Scuff conf=0.50
+    [1] bbox=(127, 0, 172, 23) area=1705 class=Blur conf=0.40
+    [2] bbox=(110, 596, 59, 53) area=645 class=Lamination Scuff conf=0.50
+    [3] bbox=(0, 0, 44, 135) area=562 class=Missing Stitch conf=0.45
+    [4] bbox=(0, 147, 10, 34) area=36 class=Blur conf=0.40
+    [5] bbox=(46, 0, 31, 10) area=28 class=Blur conf=0.40
+    [6] bbox=(66, 0, 33, 10) area=25 class=Blur conf=0.40
+expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara\golden.jpg | candidate=evaluation_results\augmented_goldens\zara\golden__05_color_shift.png
 
-Saved visualization -> evaluation_results\all_case_reports\TN_PASS_zara__aug_05_color_shift_report.png
+Saved visualization -> evaluation_results\all_case_reports\FP_Gate2_zara__aug_05_color_shift_report.png
 
 
 ======================================================================
@@ -1289,10 +1275,10 @@ VERDICT: REJECT_GATE2
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.3854
+  SSIM score: 0.4323
   registration matches used: 0
   hot spots found: 1
-    [0] bbox=(0, 0, 700, 109) area=70371 class=Missing Stitch conf=0.45
+    [0] bbox=(0, 0, 700, 109) area=69986 class=Missing Stitch conf=0.45
 expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara_narrow\golden.jpg | candidate=evaluation_results\augmented_goldens\zara_narrow\golden__01_rotate.png
 
@@ -1310,7 +1296,7 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.9971
+  SSIM score: 0.9949
   registration matches used: 0
   hot spots found: 0
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
@@ -1322,24 +1308,26 @@ Saved visualization -> evaluation_results\all_case_reports\TN_PASS_zara_narrow__
 ======================================================================
 zara_narrow__aug_03_blur_noise
 ======================================================================
-VERDICT: REJECT_GATE2
+VERDICT: PASS
 -- Gate 1 (Structural) --
   passed: True
   size(px): 108.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: False
-  SSIM score: 0.6497
+  passed: True
+  SSIM score: 0.8201
   registration matches used: 0
-  hot spots found: 3
-    [0] bbox=(0, 0, 646, 109) area=55648 class=Missing Stitch conf=0.45
-    [1] bbox=(590, 0, 110, 109) area=2719 class=Missing Stitch conf=0.45
-    [2] bbox=(411, 0, 31, 13) area=30 class=Missing Stitch conf=0.45
-expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
+  hot spots found: 5
+    [0] bbox=(604, 0, 96, 109) area=404 class=Missing Stitch conf=0.45
+    [1] bbox=(0, 97, 98, 12) area=210 class=Blur conf=0.40
+    [2] bbox=(435, 0, 166, 10) area=146 class=Blur conf=0.40
+    [3] bbox=(87, 98, 88, 11) area=102 class=Blur conf=0.40
+    [4] bbox=(356, 0, 86, 11) area=63 class=Blur conf=0.40
+expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
 source: golden=label_dataset\label_dataset\zara_narrow\golden.jpg | candidate=evaluation_results\augmented_goldens\zara_narrow\golden__03_blur_noise.png
 
-Saved visualization -> evaluation_results\all_case_reports\FP_Gate2_zara_narrow__aug_03_blur_noise_report.png
+Saved visualization -> evaluation_results\all_case_reports\TN_PASS_zara_narrow__aug_03_blur_noise_report.png
 
 
 ======================================================================
@@ -1348,15 +1336,15 @@ zara_narrow__aug_04_perspective
 VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
-  size(px): 108.0 x 693.0
+  size(px): 108.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
   passed: False
-  SSIM score: 0.4233
+  SSIM score: 0.5893
   registration matches used: 0
   hot spots found: 1
-    [0] bbox=(0, 0, 700, 109) area=68306 class=Missing Stitch conf=0.45
+    [0] bbox=(0, 0, 700, 109) area=50047 class=Missing Stitch conf=0.45
 expected: clean | predicted: FAULT | outcome: FP | stage: Gate 2
 source: golden=label_dataset\label_dataset\zara_narrow\golden.jpg | candidate=evaluation_results\augmented_goldens\zara_narrow\golden__04_perspective.png
 
@@ -1374,16 +1362,16 @@ VERDICT: PASS
   components found: 1
 -- Gate 2 (Content) --
   passed: True
-  SSIM score: 0.8335
+  SSIM score: 0.8330
   registration matches used: 0
   hot spots found: 8
-    [0] bbox=(386, 0, 228, 18) area=1402 class=Blur conf=0.40
-    [1] bbox=(603, 0, 97, 26) area=586 class=Blur conf=0.40
-    [2] bbox=(316, 0, 58, 15) area=210 class=Blur conf=0.40
-    [3] bbox=(120, 94, 53, 15) area=134 class=Blur conf=0.40
-    [4] bbox=(60, 93, 57, 16) area=133 class=Blur conf=0.40
-    [5] bbox=(195, 95, 44, 14) area=105 class=Blur conf=0.40
-    [6] bbox=(0, 98, 29, 11) area=42 class=Blur conf=0.40
+    [0] bbox=(386, 0, 228, 17) area=1364 class=Blur conf=0.40
+    [1] bbox=(603, 0, 97, 26) area=476 class=Blur conf=0.40
+    [2] bbox=(316, 0, 56, 15) area=184 class=Blur conf=0.40
+    [3] bbox=(57, 93, 60, 16) area=151 class=Blur conf=0.40
+    [4] bbox=(183, 94, 56, 15) area=136 class=Blur conf=0.40
+    [5] bbox=(120, 94, 53, 15) area=134 class=Blur conf=0.40
+    [6] bbox=(0, 97, 29, 12) area=70 class=Text/Number Mismatch conf=0.55
     [7] bbox=(227, 0, 25, 14) area=35 class=Text/Number Mismatch conf=0.55
 expected: clean | predicted: CLEAN | outcome: TN | stage: PASS
 source: golden=label_dataset\label_dataset\zara_narrow\golden.jpg | candidate=evaluation_results\augmented_goldens\zara_narrow\golden__05_color_shift.png
