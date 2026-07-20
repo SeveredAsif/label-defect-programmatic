@@ -441,6 +441,10 @@ class ContentGate:
         _, thresh = cv2.threshold(diff, self.diff_noise_floor, 255, cv2.THRESH_BINARY)
         return diff, thresh
 
+    @staticmethod
+    def _foreground_area(mask: np.ndarray) -> int:
+        return int(np.count_nonzero(mask))
+
     def inspect(self, golden_bgr: np.ndarray, candidate_bgr: np.ndarray) -> Gate2Result:
         reasons: List[str] = []
 
@@ -466,30 +470,55 @@ class ContentGate:
         aligned_gray = self._to_gray_equalized(aligned_bgr)
         aligned_gray = self._match_illumination(golden_gray, aligned_gray)
 
-        ssim_score, ssim_map = self._ssim_map(golden_gray, aligned_gray)
+        _, golden_fg = cv2.threshold(golden_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        golden_fg_frac = (golden_fg > 0).mean()
+        if golden_fg_frac > 0.5:
+            golden_fg = cv2.bitwise_not(golden_fg)
+
+        # Build a shared foreground mask so SSIM is evaluated on the label
+        # content itself, not on background pixels or warp-induced border
+        # differences. This is the main guard against clean augmented samples
+        # looking artificially dissimilar.
+        _, aligned_fg = cv2.threshold(aligned_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        aligned_fg_frac = (aligned_fg > 0).mean()
+        if aligned_fg_frac > 0.5:
+            aligned_fg = cv2.bitwise_not(aligned_fg)
+
+        fg_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        golden_fg = cv2.dilate(golden_fg, fg_kernel, iterations=2)
+        aligned_fg = cv2.dilate(aligned_fg, fg_kernel, iterations=2)
+        comparison_mask = cv2.bitwise_and(golden_fg, aligned_fg)
+        if self._foreground_area(comparison_mask) == 0:
+            comparison_mask = golden_fg
+
+        mask_for_ssim = cv2.erode(
+            comparison_mask,
+            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+            iterations=1,
+        )
+        if self._foreground_area(mask_for_ssim) == 0:
+            mask_for_ssim = comparison_mask
+
+        masked_golden = golden_gray.copy()
+        masked_aligned = aligned_gray.copy()
+        masked_aligned[mask_for_ssim == 0] = masked_golden[mask_for_ssim == 0]
+
+        ssim_score, ssim_map = self._ssim_map(masked_golden, masked_aligned)
+        ssim_map = ssim_map.astype(np.float32)
+        ssim_map[mask_for_ssim == 0] = 1.0
+
         diff_map, diff_thresh = self._diff_map(golden_gray, aligned_gray)
 
         # Low local SSIM -> anomaly
         ssim_defect_mask = ((ssim_map < self.ssim_defect_threshold) * 255).astype(np.uint8)
 
-        # Ignore regions with no ribbon content (pure background outside the
-        # warped label) by masking to the golden label's own foreground.
-        _, golden_fg = cv2.threshold(golden_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        fg_frac = (golden_fg > 0).mean()
-        if fg_frac > 0.5:
-            golden_fg = cv2.bitwise_not(golden_fg)
-
-    #------------------------------------------------------------------------------
-
-        # 1. Expand golden foreground margin
-        kernel7 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        golden_fg_dilated = cv2.dilate(golden_fg, kernel7, iterations=2)
-
         # Step A: Merge SSIM + Diff masks (Union)
         step1_or = cv2.bitwise_or(ssim_defect_mask, diff_thresh)
 
-        # Step B: Clip to golden foreground (Crop background noise)
-        step2_and = cv2.bitwise_and(step1_or, golden_fg_dilated)
+        # Step B: Clip to the shared foreground overlap, not just the golden
+        # foreground. This prevents border/interpolation artifacts from being
+        # promoted to defects.
+        step2_and = cv2.bitwise_and(step1_or, comparison_mask)
 
         # Step C: Remove tiny noise specks (Opening)
         kernel3 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
@@ -592,17 +621,25 @@ class ContentGate:
         # Sort largest-first: biggest anomalies are usually most actionable
         hotspots.sort(key=lambda hs: hs.area, reverse=True)
 
+        hotspot_area = sum(hs.area for hs in hotspots)
+        reject_hotspot_area = max(self.min_hotspot_area * 3, int(0.01 * self._foreground_area(comparison_mask)))
+
         if ssim_score < self.overall_ssim_reject_threshold:
-            reasons.append(
-                f"Overall SSIM {ssim_score:.3f} below threshold "
-                f"{self.overall_ssim_reject_threshold} — print content does not "
-                f"match the golden reference closely enough."
-            )
+            if hotspot_area >= reject_hotspot_area:
+                reasons.append(
+                    f"Overall SSIM {ssim_score:.3f} below threshold "
+                    f"{self.overall_ssim_reject_threshold} with {hotspot_area}px of hotspot evidence — "
+                    f"print content does not match the golden reference closely enough."
+                )
+            else:
+                reasons.append(
+                    f"Overall SSIM {ssim_score:.3f} is below threshold, but hotspot evidence is too small "
+                    f"({hotspot_area}px < {reject_hotspot_area}px) to reject."
+                )
         if hotspots:
             reasons.append(f"{len(hotspots)} hot spot(s) require classification.")
 
-        #passed = ssim_score >= self.overall_ssim_reject_threshold and len(hotspots) == 0
-        passed = ssim_score >= self.overall_ssim_reject_threshold
+        passed = not (ssim_score < self.overall_ssim_reject_threshold and hotspot_area >= reject_hotspot_area)
 
         return Gate2Result(
             passed=passed,
