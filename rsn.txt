@@ -2,22 +2,22 @@ SUMMARY
   total_samples: 51
   faulty_samples: 33
   clean_samples: 18
-  TP: 27
+  TP: 31
   TN: 17
   FP: 1
-  FN: 6
-  precision: 0.9643
-  recall: 0.8182
+  FN: 2
+  precision: 0.9688
+  recall: 0.9394
   specificity: 0.9444
-  npv: 0.7391
+  npv: 0.8947
   false_positive_rate: 0.0556
-  false_negative_rate: 0.1818
+  false_negative_rate: 0.0606
 
 STAGE BREAKDOWN
-  TP @ Gate 2: 27
+  TP @ Gate 2: 31
   TN @ PASS: 17
   FP @ Gate 2: 1
-  FN @ PASS: 6
+  FN @ PASS: 2
 
 ======================================================================
 Primark_1
@@ -86,14 +86,14 @@ Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_2_re
 ======================================================================
 Primark_3
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 131.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8100
   registration matches used: 0
   hot spots found: 8
@@ -105,23 +105,23 @@ VERDICT: PASS
     [5] bbox=(617, 43, 24, 22) area=50 class=Lamination Scuff conf=0.50
     [6] bbox=(632, 32, 23, 21) area=48 class=Lamination Scuff conf=0.50
     [7] bbox=(219, 0, 25, 11) area=39 class=Lamination Scuff conf=0.50
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_3_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_3_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_3_report.png
 
 
 ======================================================================
 Primark_4
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 125.0 x 692.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8921
   registration matches used: 0
   hot spots found: 9
@@ -134,10 +134,10 @@ VERDICT: PASS
     [6] bbox=(360, 73, 21, 27) area=73 class=Blur conf=0.40
     [7] bbox=(202, 133, 57, 12) area=71 class=Lamination Scuff conf=0.50
     [8] bbox=(687, 17, 13, 25) area=50 class=Lamination Scuff conf=0.50
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_4_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_4_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_4_report.png
 
 
 ======================================================================
@@ -169,14 +169,14 @@ Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_5_rep
 ======================================================================
 Primark_6
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 133.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8063
   registration matches used: 0
   hot spots found: 8
@@ -188,23 +188,23 @@ VERDICT: PASS
     [5] bbox=(633, 82, 35, 34) area=179 class=Lamination Scuff conf=0.50
     [6] bbox=(126, 0, 54, 11) area=103 class=Blur conf=0.40
     [7] bbox=(611, 0, 27, 11) area=38 class=Missing Stitch conf=0.45
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_6_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_6_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_6_report.png
 
 
 ======================================================================
 Primark_7
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 131.0 x 692.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.8166
   registration matches used: 0
   hot spots found: 7
@@ -215,10 +215,10 @@ VERDICT: PASS
     [4] bbox=(126, 0, 402, 15) area=2428 class=Blur conf=0.40
     [5] bbox=(339, 70, 40, 37) area=394 class=Blur conf=0.40
     [6] bbox=(639, 69, 25, 20) area=51 class=Lamination Scuff conf=0.50
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_7_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_7_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_7_report.png
 
 
 ======================================================================

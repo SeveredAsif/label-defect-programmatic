@@ -1,4 +1,3 @@
-
 """
 AI-Powered Label Inspection — Two-Gate Hybrid Pipeline
 =======================================================
@@ -97,6 +96,9 @@ class Gate2Result:
     hotspots: List[HotSpot] = field(default_factory=list)
     homography: Optional[np.ndarray] = None
     num_good_matches: Optional[int] = None
+    hotspot_area_frac: Optional[float] = None
+    max_hotspot_area_frac: Optional[float] = None
+    severity_frac: Optional[float] = None
 
 
 @dataclass
@@ -301,6 +303,16 @@ class ContentGate:
         overall_ssim_reject_threshold: float = 0.75,
         min_good_matches: int = 8,
         orb_features: int = 3000,
+        # -- Severity-based reject (independent of global SSIM / hotspot count) --
+        # Real localized defects (missing stitch, blur patch, ink bleed) push local
+        # SSIM strongly negative over a solid area; registration/lighting noise from
+        # handheld photography only nudges local SSIM just under ssim_defect_threshold
+        # over scattered/thin regions. Weighting hotspot area by (1 - local SSIM) and
+        # normalizing by the label's foreground area gives a scale-invariant score
+        # that separates the two far better than raw area, hotspot count, or global
+        # SSIM alone (see the "severity_frac" analysis backing this default).
+        severity_frac_reject_threshold: float = 0.15,
+        max_hotspot_frac_reject_threshold: float = 0.45,
     ):
         self.ssim_win_size = ssim_win_size
         self.ssim_defect_threshold = ssim_defect_threshold
@@ -308,6 +320,8 @@ class ContentGate:
         self.min_hotspot_area = min_hotspot_area
         self.overall_ssim_reject_threshold = overall_ssim_reject_threshold
         self.min_good_matches = min_good_matches
+        self.severity_frac_reject_threshold = severity_frac_reject_threshold
+        self.max_hotspot_frac_reject_threshold = max_hotspot_frac_reject_threshold
         self.orb = cv2.ORB_create(nfeatures=orb_features)
 
     # -- Step 1: Alignment / Registration -----------------------------------
@@ -627,12 +641,29 @@ class ContentGate:
         # Sort largest-first: biggest anomalies are usually most actionable
         hotspots.sort(key=lambda hs: hs.area, reverse=True)
 
-        defect_signature_count = sum(
-            1 for hs in hotspots if hs.defect_class in {"Missing Stitch", "Ink Bleed", "Text/Number Mismatch"}
-        )
         hotspot_area = sum(hs.area for hs in hotspots)
         reject_hotspot_area = max(self.min_hotspot_area * 3, int(0.01 * self._foreground_area(comparison_mask)))
         high_ssim_hotspot_count = 10
+
+        # -- Severity score: area-weighted local dissimilarity, independent of the
+        # global SSIM value. This is what actually catches a localized real defect
+        # (e.g. a missing stitch) that sits inside an otherwise well-matched label,
+        # where the *global* SSIM stays high enough to dodge the check above, and
+        # the hotspot *count* is indistinguishable from registration noise on a
+        # clean sample (both can produce 6-9 small hotspots).
+        fg_area = max(1, self._foreground_area(comparison_mask))
+        weighted_severity = 0.0
+        max_hotspot_area = 0
+        for hs in hotspots:
+            x, y, ww, hh = hs.bbox
+            local_ssim = ssim_map[y:y + hh, x:x + ww]
+            severity_weight = max(0.0, 1.0 - float(local_ssim.mean()))
+            weighted_severity += hs.area * severity_weight
+            max_hotspot_area = max(max_hotspot_area, hs.area)
+
+        severity_frac = weighted_severity / fg_area
+        max_hotspot_frac = max_hotspot_area / fg_area
+        hotspot_area_frac = hotspot_area / fg_area
 
         if ssim_score < self.overall_ssim_reject_threshold:
             if hotspot_area >= reject_hotspot_area:
@@ -650,12 +681,26 @@ class ContentGate:
             reasons.append(
                 f"High-SSIM sample still has {len(hotspots)} hot spots — likely a real defect cluster."
             )
+
+        severity_reject = severity_frac >= self.severity_frac_reject_threshold
+        max_hotspot_reject = max_hotspot_frac >= self.max_hotspot_frac_reject_threshold
+        if severity_reject or max_hotspot_reject:
+            reasons.append(
+                f"Localized defect evidence: severity_frac={severity_frac:.3f} "
+                f"(threshold {self.severity_frac_reject_threshold}), "
+                f"max_hotspot_frac={max_hotspot_frac:.3f} "
+                f"(threshold {self.max_hotspot_frac_reject_threshold}) — "
+                f"a concentrated, strongly dissimilar region was found even though "
+                f"global SSIM/hotspot-count stayed in the 'clean-looking' range."
+            )
         if hotspots:
             reasons.append(f"{len(hotspots)} hot spot(s) require classification.")
 
         passed = not (
             (ssim_score < self.overall_ssim_reject_threshold and hotspot_area >= reject_hotspot_area)
             or (len(hotspots) >= high_ssim_hotspot_count)
+            or severity_reject
+            or max_hotspot_reject
         )
 
         return Gate2Result(
@@ -669,6 +714,9 @@ class ContentGate:
             hotspots=hotspots,
             homography=H,
             num_good_matches=n_matches,
+            hotspot_area_frac=float(hotspot_area_frac),
+            max_hotspot_area_frac=float(max_hotspot_frac),
+            severity_frac=float(severity_frac),
         )
 
 
