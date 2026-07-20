@@ -99,6 +99,7 @@ class Gate2Result:
     hotspot_area_frac: Optional[float] = None
     max_hotspot_area_frac: Optional[float] = None
     severity_frac: Optional[float] = None
+    diff_severity_frac: Optional[float] = None
 
 
 @dataclass
@@ -313,6 +314,17 @@ class ContentGate:
         # SSIM alone (see the "severity_frac" analysis backing this default).
         severity_frac_reject_threshold: float = 0.15,
         max_hotspot_frac_reject_threshold: float = 0.45,
+        # Complementary to severity_frac: weights hotspot area by raw pixel-value
+        # difference (0-1) instead of (1 - local SSIM). SSIM is a structural/
+        # variance-covariance measure, so a "flat" defect (a missing printed
+        # character, a solid patch swapped for a differently-shaped-but-equally-
+        # smooth icon) can keep local SSIM only moderately depressed even though
+        # the raw pixel values are clearly wrong. diff_severity_frac catches
+        # exactly that case; severity_frac catches textured/chaotic defects
+        # (torn stitching, blur, ink bleed). Kept as two separate signals
+        # (OR'd at reject time) rather than merged, so the report can tell you
+        # which kind of evidence fired.
+        diff_severity_frac_reject_threshold: float = 0.05,
     ):
         self.ssim_win_size = ssim_win_size
         self.ssim_defect_threshold = ssim_defect_threshold
@@ -322,6 +334,7 @@ class ContentGate:
         self.min_good_matches = min_good_matches
         self.severity_frac_reject_threshold = severity_frac_reject_threshold
         self.max_hotspot_frac_reject_threshold = max_hotspot_frac_reject_threshold
+        self.diff_severity_frac_reject_threshold = diff_severity_frac_reject_threshold
         self.orb = cv2.ORB_create(nfeatures=orb_features)
 
     # -- Step 1: Alignment / Registration -----------------------------------
@@ -653,15 +666,20 @@ class ContentGate:
         # clean sample (both can produce 6-9 small hotspots).
         fg_area = max(1, self._foreground_area(comparison_mask))
         weighted_severity = 0.0
+        diff_weighted_severity = 0.0
         max_hotspot_area = 0
         for hs in hotspots:
             x, y, ww, hh = hs.bbox
             local_ssim = ssim_map[y:y + hh, x:x + ww]
+            local_diff = diff_map[y:y + hh, x:x + ww]
             severity_weight = max(0.0, 1.0 - float(local_ssim.mean()))
+            diff_weight = float(local_diff.mean()) / 255.0
             weighted_severity += hs.area * severity_weight
+            diff_weighted_severity += hs.area * diff_weight
             max_hotspot_area = max(max_hotspot_area, hs.area)
 
         severity_frac = weighted_severity / fg_area
+        diff_severity_frac = diff_weighted_severity / fg_area
         max_hotspot_frac = max_hotspot_area / fg_area
         hotspot_area_frac = hotspot_area / fg_area
 
@@ -683,15 +701,23 @@ class ContentGate:
             )
 
         severity_reject = severity_frac >= self.severity_frac_reject_threshold
+        diff_severity_reject = diff_severity_frac >= self.diff_severity_frac_reject_threshold
         max_hotspot_reject = max_hotspot_frac >= self.max_hotspot_frac_reject_threshold
         if severity_reject or max_hotspot_reject:
             reasons.append(
-                f"Localized defect evidence: severity_frac={severity_frac:.3f} "
+                f"Localized textured defect evidence: severity_frac={severity_frac:.3f} "
                 f"(threshold {self.severity_frac_reject_threshold}), "
                 f"max_hotspot_frac={max_hotspot_frac:.3f} "
                 f"(threshold {self.max_hotspot_frac_reject_threshold}) — "
-                f"a concentrated, strongly dissimilar region was found even though "
+                f"a concentrated, structurally dissimilar region was found even though "
                 f"global SSIM/hotspot-count stayed in the 'clean-looking' range."
+            )
+        if diff_severity_reject:
+            reasons.append(
+                f"Localized flat/tonal defect evidence: diff_severity_frac={diff_severity_frac:.3f} "
+                f"(threshold {self.diff_severity_frac_reject_threshold}) — a concentrated region "
+                f"with a large raw pixel-value mismatch was found (e.g. missing print, swapped "
+                f"solid patch/icon) that structural SSIM alone under-weights."
             )
         if hotspots:
             reasons.append(f"{len(hotspots)} hot spot(s) require classification.")
@@ -701,6 +727,7 @@ class ContentGate:
             or (len(hotspots) >= high_ssim_hotspot_count)
             or severity_reject
             or max_hotspot_reject
+            or diff_severity_reject
         )
 
         return Gate2Result(
@@ -717,6 +744,7 @@ class ContentGate:
             hotspot_area_frac=float(hotspot_area_frac),
             max_hotspot_area_frac=float(max_hotspot_frac),
             severity_frac=float(severity_frac),
+            diff_severity_frac=float(diff_severity_frac),
         )
 
 

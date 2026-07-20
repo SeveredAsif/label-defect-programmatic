@@ -2,22 +2,22 @@ SUMMARY
   total_samples: 51
   faulty_samples: 33
   clean_samples: 18
-  TP: 31
+  TP: 32
   TN: 17
   FP: 1
-  FN: 2
-  precision: 0.9688
-  recall: 0.9394
+  FN: 1
+  precision: 0.9697
+  recall: 0.9697
   specificity: 0.9444
-  npv: 0.8947
+  npv: 0.9444
   false_positive_rate: 0.0556
-  false_negative_rate: 0.0606
+  false_negative_rate: 0.0303
 
 STAGE BREAKDOWN
-  TP @ Gate 2: 31
+  TP @ Gate 2: 32
   TN @ PASS: 17
   FP @ Gate 2: 1
-  FN @ PASS: 2
+  FN @ PASS: 1
 
 ======================================================================
 Primark_1
@@ -143,14 +143,14 @@ Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_4_re
 ======================================================================
 Primark_5
 ======================================================================
-VERDICT: PASS
+VERDICT: REJECT_GATE2
 -- Gate 1 (Structural) --
   passed: True
   size(px): 140.0 x 699.0
   skew angle: 0.00 deg
   components found: 1
 -- Gate 2 (Content) --
-  passed: True
+  passed: False
   SSIM score: 0.9217
   registration matches used: 0
   hot spots found: 6
@@ -160,10 +160,10 @@ VERDICT: PASS
     [3] bbox=(372, 20, 99, 46) area=2043 class=Blur conf=0.40
     [4] bbox=(502, 122, 198, 23) area=1009 class=Missing Stitch conf=0.45
     [5] bbox=(89, 133, 62, 12) area=156 class=Missing Stitch conf=0.45
-expected: faulty | predicted: CLEAN | outcome: FN | stage: PASS
+expected: faulty | predicted: FAULT | outcome: TP | stage: Gate 2
 source: golden=label_dataset\label_dataset\Primark\golden.jpg | candidate=label_dataset\label_dataset\Primark\Primark_faulty\photo_5_2026-07-04_14-11-47.jpg
 
-Saved visualization -> evaluation_results\all_case_reports\FN_PASS_Primark_5_report.png
+Saved visualization -> evaluation_results\all_case_reports\TP_Gate2_Primark_5_report.png
 
 
 ======================================================================
