@@ -33,21 +33,24 @@ import matplotlib.pyplot as plt
 
 from pipeline import LabelInspector, StructuralGate
 
-DATASET_ROOT = Path("label_dataset") / "label_dataset"
+DATASET_ROOT = Path(os.environ.get("LABEL_DATASET_ROOT", Path("label_dataset") / "label_dataset"))
+OUTPUT_SUFFIX = os.environ.get("LABEL_OUTPUT_SUFFIX", "")
+if OUTPUT_SUFFIX and not OUTPUT_SUFFIX.startswith("_"):
+    OUTPUT_SUFFIX = f"_{OUTPUT_SUFFIX}"
 OUT_DIR = Path(".")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-EVAL_DIR = OUT_DIR / "evaluation_results"
+EVAL_DIR = Path(os.environ.get("LABEL_EVALUATION_DIR", OUT_DIR / f"evaluation_results{OUTPUT_SUFFIX}"))
 ALL_REPORTS_DIR = EVAL_DIR / "all_case_reports"
 ANALYSIS_DIR = EVAL_DIR / "analysis_images"
 AUGMENTED_DIR = EVAL_DIR / "augmented_goldens"
 for directory in (EVAL_DIR, ALL_REPORTS_DIR, ANALYSIS_DIR, AUGMENTED_DIR):
     directory.mkdir(parents=True, exist_ok=True)
 
-REPORT_PATH = OUT_DIR / "rsn.txt"
-SUMMARY_PATH = EVAL_DIR / "rsn.txt"
-PREDICTIONS_PATH = EVAL_DIR / "predictions.csv"
-CLASSIFICATION_REPORT_PATH = EVAL_DIR / "classification_report.csv"
-HARD_MISTAKES_PATH = EVAL_DIR / "hardest_mistakes.csv"
+REPORT_PATH = OUT_DIR / f"rsn{OUTPUT_SUFFIX}.txt"
+SUMMARY_PATH = EVAL_DIR / f"rsn{OUTPUT_SUFFIX}.txt"
+PREDICTIONS_PATH = EVAL_DIR / f"predictions{OUTPUT_SUFFIX}.csv"
+CLASSIFICATION_REPORT_PATH = EVAL_DIR / f"classification_report{OUTPUT_SUFFIX}.csv"
+HARD_MISTAKES_PATH = EVAL_DIR / f"hardest_mistakes{OUTPUT_SUFFIX}.csv"
 
 EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 DISPLAY_NAME_MAP = {
@@ -215,7 +218,8 @@ def estimate_target_size(golden_bgr):
 #     return (min(w, h), max(w, h))
 
 
-def visualize(set_name, golden_bgr, candidate_bgr, report, out_path, mirror_paths=None):
+def visualize(set_name, golden_bgr, candidate_bgr, report, out_path, mirror_paths=None,
+              golden_label=None, candidate_label=None):
     fig, axes = plt.subplots(2, 3, figsize=(15, 9))
     fig.suptitle(f"Label Inspection — {set_name} — verdict: {report.verdict}", fontsize=14)
 
@@ -231,13 +235,20 @@ def visualize(set_name, golden_bgr, candidate_bgr, report, out_path, mirror_path
         ax.set_title(title)
         ax.axis("off")
 
-    show(axes[0, 0], golden_bgr, "Golden Reference")
+    golden_title = "Golden Reference"
+    if golden_label:
+        golden_title += f"\n{golden_label}"
+    show(axes[0, 0], golden_bgr, golden_title)
 
     cand_annot = candidate_bgr.copy()
     if report.gate1.box_points is not None:
         cv2.drawContours(cand_annot, [np.int32(report.gate1.box_points)], 0, (0, 255, 0), 2)
-    show(axes[0, 1], cand_annot, f"Candidate + Gate1 box\nskew={report.gate1.angle_deg:.2f} deg"
-         if report.gate1.angle_deg is not None else "Candidate + Gate1 box")
+    cand_title = "Candidate + Gate1 box"
+    if candidate_label:
+        cand_title += f"\n{candidate_label}"
+    if report.gate1.angle_deg is not None:
+        cand_title += f"\nskew={report.gate1.angle_deg:.2f} deg"
+    show(axes[0, 1], cand_annot, cand_title)
 
     show(axes[0, 2], report.gate1.mask, "Gate 1 binary mask", cmap="gray")
 
@@ -276,11 +287,18 @@ def collect_sets():
 
         golden_path = brand_dir / "golden.jpg"
         if not golden_path.exists():
+            # Kabir dataset layout: sampleN/golden/*.jpg and sampleN/faulty/*.jpg.
+            golden_candidates = sorted(
+                p for p in (brand_dir / "golden").glob("*")
+                if p.is_file() and p.suffix.lower() in EXTENSIONS
+            )
+            golden_path = golden_candidates[0] if golden_candidates else golden_path
+        if not golden_path.exists():
             continue
 
         faulty_dirs = [
             d for d in sorted(brand_dir.iterdir())
-            if d.is_dir() and d.name.lower().endswith("_faulty")
+            if d.is_dir() and (d.name.lower().endswith("_faulty") or d.name.lower() == "faulty")
         ]
         if not faulty_dirs:
             continue
@@ -315,6 +333,16 @@ def collect_golden_cases():
         golden_path = brand_dir / "golden.jpg"
         if golden_path.exists():
             cases.append((brand_dir.name, golden_path))
+            continue
+        golden_dir = brand_dir / "golden"
+        if golden_dir.is_dir():
+            golden_paths = sorted(
+                p for p in golden_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in EXTENSIONS
+            )
+            if golden_paths:
+                # The first crop is the reference used for each clean variation.
+                cases.append((brand_dir.name, golden_paths[0]))
     return cases
 
 
