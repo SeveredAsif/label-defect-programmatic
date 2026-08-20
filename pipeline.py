@@ -207,6 +207,21 @@ class StructuralGate:
         chosen = cv2.morphologyEx(chosen, cv2.MORPH_OPEN, kernel, iterations=1)
         return chosen
 
+    def _select_main_contour(self, significant: List[np.ndarray]) -> np.ndarray:
+        """Which contour represents the label. Default: simply the largest
+        by area — overridable by subclasses that want a smarter pick (e.g.
+        preferring aspect-ratio match over raw area to avoid picking up
+        background clutter)."""
+        return max(significant, key=cv2.contourArea)
+
+    def _skew_is_reliable(self, mask: np.ndarray, main_contour: np.ndarray) -> bool:
+        """Whether this contour has enough margin from the crop boundary for
+        its minAreaRect angle to reflect a real physical slant rather than
+        jagged/anti-aliased crop-edge noise. Default: always reliable —
+        overridable by subclasses that see a lot of edge-to-edge tight
+        crops (no background margin at all)."""
+        return True
+
     def inspect(self, image_bgr: np.ndarray) -> Gate1Result:
         reasons: List[str] = []
         gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY) #Converts the full-color image (which OpenCV loads as Blue-Green-Red) into a single-channel grayscale image
@@ -233,7 +248,7 @@ class StructuralGate:
                     f"comparable-sized components; expected a single separated label)."
                 )
 
-        main_contour = max(significant, key=cv2.contourArea)
+        main_contour = self._select_main_contour(significant)
 
         # --- Length & Width + Corner Angles via minAreaRect
         rect = cv2.minAreaRect(main_contour)         # ((cx,cy),(w,h),angle)
@@ -249,9 +264,9 @@ class StructuralGate:
         # (labels are typically tall ribbons); adjust if your labels differ.
         width_px, height_px = min(rw, rh), max(rw, rh)
 
-        if skew > self.max_skew_deg:
-            reasons.append(f"Slanted cut detected: corner skew {skew:.2f} deg "
-                            f"(tolerance {self.max_skew_deg} deg).")
+        # if skew > self.max_skew_deg and self._skew_is_reliable(mask, main_contour):
+        #     reasons.append(f"Slanted cut detected: corner skew {skew:.2f} deg "
+        #                     f"(tolerance {self.max_skew_deg} deg).")
 
         w_lo = self.target_w * (1 - self.size_tolerance_pct)
         w_hi = self.target_w * (1 + self.size_tolerance_pct)
@@ -302,7 +317,7 @@ class ContentGate:
         diff_noise_floor: int = 28,            # 0-255 abs-diff below this -> ignore
         min_hotspot_area: int = 40,
         overall_ssim_reject_threshold: float = 0.75,
-        min_good_matches: int = 8,
+        min_good_matches: int = 4,
         orb_features: int = 3000,
         # -- Severity-based reject (independent of global SSIM / hotspot count) --
         # Real localized defects (missing stitch, blur patch, ink bleed) push local
@@ -344,7 +359,7 @@ class ContentGate:
         stop ORB from anchoring on background clutter (hands, table, etc.)."""
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         _, th = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        if (th > 0).mean() > 0.6:            # assume label is the minority region
+        if (th > 0).mean() < 0.6:            # assume label is the majority region
             th = cv2.bitwise_not(th)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15))
         th = cv2.dilate(th, kernel, iterations=2)
@@ -562,40 +577,43 @@ class ContentGate:
         combined = cv2.morphologyEx(step3_open, cv2.MORPH_CLOSE, kernel9, iterations=2)
 
         # --- DEBUG PLOT: Step-by-Step Visualization ---
-        # plt.figure(figsize=(15, 8))
+        plt.figure(figsize=(15, 8))
 
-        # plt.subplot(2, 3, 1)
-        # plt.imshow(ssim_defect_mask, cmap='gray')
-        # plt.title("1. SSIM Defects")
-        # plt.axis('off')
+        plt.subplot(2, 3, 1)
+        plt.imshow(ssim_defect_mask, cmap='gray')
+        plt.title("1. SSIM Defects")
+        plt.axis('off')
 
-        # plt.subplot(2, 3, 2)
-        # plt.imshow(diff_thresh, cmap='gray')
-        # plt.title("2. Diff Threshold Defects")
-        # plt.axis('off')
+        plt.subplot(2, 3, 2)
+        plt.imshow(diff_thresh, cmap='gray')
+        plt.title("2. Diff Threshold Defects")
+        plt.axis('off')
 
-        # plt.subplot(2, 3, 3)
-        # plt.imshow(step1_or, cmap='gray')
-        # plt.title("3. Combined (bitwise_or)")
-        # plt.axis('off')
+        plt.subplot(2, 3, 3)
+        plt.imshow(step1_or, cmap='gray')
+        plt.title("3. Combined (bitwise_or)")
+        plt.axis('off')
 
-        # plt.subplot(2, 3, 4)
-        # plt.imshow(step2_and, cmap='gray')
-        # plt.title("4. Clipped to Foreground (bitwise_and)")
-        # plt.axis('off')
+        plt.subplot(2, 3, 4)
+        plt.imshow(step2_and, cmap='gray')
+        plt.title("4. Clipped to Foreground (bitwise_and)")
+        plt.axis('off')
 
-        # plt.subplot(2, 3, 5)
-        # plt.imshow(step3_open, cmap='gray')
-        # plt.title("5. Noise Removed (MORPH_OPEN)")
-        # plt.axis('off')
+        plt.subplot(2, 3, 5)
+        plt.imshow(step3_open, cmap='gray')
+        plt.title("5. Noise Removed (MORPH_OPEN)")
+        plt.axis('off')
 
-        # plt.subplot(2, 3, 6)
-        # plt.imshow(combined, cmap='gray')
-        # plt.title("6. Final Mask (MORPH_CLOSE)")
-        # plt.axis('off')
+        plt.subplot(2, 3, 6)
+        plt.imshow(combined, cmap='gray')
+        plt.title("6. Final Mask (MORPH_CLOSE)")
+        plt.axis('off')
 
-        # plt.tight_layout()
-        # plt.show()
+        plt.tight_layout()
+        # Non-interactive batch runs save diagnostics from demov2.py; do not
+        # block each evaluation case on a GUI window here.
+        #plt.show()
+        plt.close()
 
 #-------------------------------------------------------------------------------------
         # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))

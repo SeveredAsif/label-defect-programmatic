@@ -28,17 +28,13 @@ import matplotlib.pyplot as plt
 from pipeline import LabelInspector, StructuralGate
 
 UPLOAD_DIR = "label_dataset/label_dataset"
-OUT_DIR = "./"
+OUT_DIR = "./brute"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 SETS = {
-    "Primark_7": {
-        "golden": os.path.join("label_dataset/label_dataset/Primark/golden.jpg"),
-        "candidate": os.path.join("evaluation_results/augmented_goldens/Primark/golden__01_rotate.png"),
-    },
     "Zara_1": {
-        "golden": os.path.join("label_dataset\label_dataset\zara\golden.jpg"),
-        "candidate": os.path.join("evaluation_results/augmented_goldens/zara/golden__03_blur_noise.png"),
+        "golden": os.path.join("cropped_kabir_golden_faulty_folderwise\sample1\golden\WhatsApp Image 2026-08-01 at 16.14.38__crop_02.jpeg"),
+        "candidate": os.path.join("cropped_kabir_golden_faulty_folderwise\sample1\golden\WhatsApp Image 2026-08-01 at 16.14.41__crop_02.jpeg"),
     },
 }
 
@@ -171,6 +167,7 @@ def main():
         print()
 
         out_path = visualize(set_name, golden, candidate, report)
+        print(report.gate2.reasons)
         print(f"Saved visualization -> {out_path}\n")
 
 
