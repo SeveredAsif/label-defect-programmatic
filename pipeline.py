@@ -169,26 +169,6 @@ class StructuralGate:
         # of the frame (avoids picking up the whole background as "label").
         _, th1 = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         th2 = cv2.bitwise_not(th1)
-        #draw here for debugging purpose 
-
-        # # --- Debug Plot ---
-        # plt.figure(figsize=(10, 5))
-
-        # # Plot th1 (Original Threshold)
-        # plt.subplot(1, 2, 1)
-        # plt.imshow(th1, cmap='gray')
-        # plt.title("th1 (Otsu Binary)")
-        # plt.axis('off')
-
-        # # Plot th2 (Inverted Threshold)
-        # plt.subplot(1, 2, 2)
-        # plt.imshow(th2, cmap='gray')
-        # plt.title("th2 (Inverted Binary)")
-        # plt.axis('off')
-
-        # plt.tight_layout()
-        # plt.show()
-
 
         def largest_component_frac(mask):
             n, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
@@ -198,9 +178,7 @@ class StructuralGate:
             return areas.max() / mask.size
 
         f1, f2 = largest_component_frac(th1), largest_component_frac(th2)
-        print(f"f1(f1: The fraction of the image covered by the largest white blob in th1 (the original threshold mask).): {f1}, f2(f2: The fraction of the image covered by the largest white blob in th2 (the inverted mask)): {f2}") #
-        #chosen = th1 if 0.05 < f1 < 0.95 and f1 >= f2 else th2
-        chosen = th1 if 0.05 < f1  and f1 >= f2 else th2
+        chosen = th1 if 0.05 < f1 and f1 >= f2 else th2
         # Clean up small noise / holes
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         chosen = cv2.morphologyEx(chosen, cv2.MORPH_CLOSE, kernel, iterations=2)
@@ -366,6 +344,114 @@ class ContentGate:
         return th
 
     @staticmethod
+    def _tight_label_rect(gray: np.ndarray) -> Optional[Tuple]:
+        """The label's own minAreaRect ((cx,cy),(w,h),angle), via the same
+        thresholding StructuralGate uses for Gate 1 (majority-aware, so it
+        doesn't invert onto the background the way a naive '>0.6 -> invert'
+        heuristic would on labels that fill most of the crop). Used to
+        recover orientation geometrically when ORB has too few keypoints/
+        matches to solve for it itself (common on this low-texture,
+        repetitive-weave fabric)."""
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        mask = StructuralGate._binarize(blurred)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return None
+        main = max(contours, key=cv2.contourArea)
+        if cv2.contourArea(main) < 0.05 * gray.size:
+            return None
+        return cv2.minAreaRect(main)
+
+    @staticmethod
+    def _rotate_bound(image: np.ndarray, angle_deg: float) -> np.ndarray:
+        """Rotate `image` about its center by `angle_deg`, expanding the
+        canvas so nothing is cropped off (unlike cv2.warpAffine at the
+        original size)."""
+        h, w = image.shape[:2]
+        cx, cy = w / 2, h / 2
+        M = cv2.getRotationMatrix2D((cx, cy), angle_deg, 1.0)
+        cos, sin = abs(M[0, 0]), abs(M[0, 1])
+        new_w = int((h * sin) + (w * cos))
+        new_h = int((h * cos) + (w * sin))
+        M[0, 2] += (new_w / 2) - cx
+        M[1, 2] += (new_h / 2) - cy
+        return cv2.warpAffine(image, M, (new_w, new_h), borderValue=(0, 0, 0))
+
+    def _geometric_align(
+        self, golden_gray: np.ndarray, golden_rect, candidate_bgr: np.ndarray, out_size: Tuple[int, int]
+    ) -> Optional[np.ndarray]:
+        """Rotation+scale+translation alignment derived purely from each
+        image's own minAreaRect, used when ORB registration fails outright
+        (too few/no good matches). This is the geometric analogue of
+        Gate 1's "corner angle" check, and — unlike a plain resize — it
+        actually corrects large rotations (including ~90 deg camera-angle
+        offsets), which a naive `cv2.resize` onto the golden's canvas
+        cannot.
+
+        A rectangle only fixes rotation up to a 180 deg ambiguity (it looks
+        the same upside down), so this straightens the candidate to the
+        golden's own orientation (portrait vs. landscape) and produces both
+        the 0 deg and 180 deg variants, returning whichever matches the
+        golden's *interior* print content better (SSIM over a crop well
+        inside the label's edges — a raw whole-canvas pixel correlation is
+        dominated by the smooth fabric/background and the high-contrast
+        label border, both of which are ~identical either way round, and so
+        is not sensitive enough to the text/logo to pick the right one).
+        """
+        out_w, out_h = out_size
+        golden_is_landscape = out_w > out_h
+
+        cand_gray = cv2.cvtColor(candidate_bgr, cv2.COLOR_BGR2GRAY)
+        cand_rect = self._tight_label_rect(cand_gray)
+        if cand_rect is None or golden_rect is None:
+            return None
+
+        straightened = self._rotate_bound(candidate_bgr, cand_rect[2])
+        s_h, s_w = straightened.shape[:2]
+        if (s_w > s_h) != golden_is_landscape:
+            straightened = cv2.rotate(straightened, cv2.ROTATE_90_CLOCKWISE)
+
+        (gcx, gcy), (gw, gh), _ = golden_rect
+        margin = 0.20
+        gx0 = int(max(0, gcx - max(gw, gh) / 2 + margin * max(gw, gh)))
+        gx1 = int(min(out_w, gcx + max(gw, gh) / 2 - margin * max(gw, gh)))
+        gy0 = int(max(0, gcy - min(gw, gh) / 2))
+        gy1 = int(min(out_h, gcy + min(gw, gh) / 2))
+        interior_valid = gx1 > gx0 and gy1 > gy0
+        golden_interior = golden_gray[gy0:gy1, gx0:gx1] if interior_valid else None
+
+        best_candidate = None
+        best_score = -np.inf
+        for variant in (straightened, cv2.rotate(straightened, cv2.ROTATE_180)):
+            variant_gray = cv2.cvtColor(variant, cv2.COLOR_BGR2GRAY)
+            variant_rect = self._tight_label_rect(variant_gray)
+            if variant_rect is None:
+                continue
+            (vcx, vcy), (vw, vh), _ = variant_rect
+            scale = max(gw, gh) / max(vw, vh)
+            M = cv2.getRotationMatrix2D((vcx, vcy), 0.0, scale)
+            M[0, 2] += gcx - vcx
+            M[1, 2] += gcy - vcy
+            placed = cv2.warpAffine(variant, M, out_size, borderValue=(0, 0, 0))
+
+            placed_gray = cv2.cvtColor(placed, cv2.COLOR_BGR2GRAY)
+            if golden_interior is not None and min(golden_interior.shape) >= self.ssim_win_size:
+                placed_interior = placed_gray[gy0:gy1, gx0:gx1]
+                score = float(ssim(golden_interior, placed_interior, win_size=self.ssim_win_size))
+            else:
+                valid = placed_gray > 0
+                if valid.sum() < 0.2 * golden_gray.size:
+                    continue
+                score = float(
+                    np.corrcoef(golden_gray[valid].astype(np.float64), placed_gray[valid].astype(np.float64))[0, 1]
+                )
+            if score > best_score:
+                best_score = score
+                best_candidate = placed
+
+        return best_candidate
+
+    @staticmethod
     def _is_sane_homography(H: np.ndarray, w: int, h: int) -> bool:
         """Reject wild/degenerate perspective warps that occasionally pop out
         of RANSAC on sparse, noisy matches (e.g. near-singular H, or a warp
@@ -497,14 +583,29 @@ class ContentGate:
         h, w = golden_bgr.shape[:2]
 
         if H is None:
-            # Fall back to plain resize-alignment so the pipeline can still
-            # run (useful for very low-texture labels with few features),
-            # but flag it since geometric registration failed.
-            reasons.append(
-                f"Feature-based registration failed (matches={n_matches}); "
-                f"falling back to direct resize alignment."
-            )
-            aligned_bgr = cv2.resize(candidate_bgr, (w, h))
+            # ORB had too few/no good matches to solve for the transform
+            # itself (common on this low-texture, repetitive-weave fabric,
+            # especially across large rotations). Never fall back to a
+            # plain resize — it ignores rotation entirely and stretches the
+            # candidate non-uniformly onto the golden's canvas, which is
+            # actively misleading for a ~90 deg-rotated photo. Instead,
+            # recover rotation+scale+translation geometrically from each
+            # image's own minAreaRect (Gate-1 style).
+            golden_rect = self._tight_label_rect(golden_gray_raw)
+            aligned_bgr = self._geometric_align(golden_gray_raw, golden_rect, candidate_bgr, (w, h))
+            if aligned_bgr is None:
+                reasons.append(
+                    f"Feature-based registration failed (matches={n_matches}) and "
+                    f"minAreaRect-based geometric alignment also failed (no label "
+                    f"contour found); Gate 2 cannot reliably compare this pair."
+                )
+                aligned_bgr = np.zeros_like(golden_bgr)
+            else:
+                reasons.append(
+                    f"Feature-based registration failed (matches={n_matches}); "
+                    f"used minAreaRect-based geometric alignment (rotation + scale + "
+                    f"translation) instead."
+                )
         else:
             aligned_bgr = cv2.warpPerspective(candidate_bgr, H, (w, h))
 
