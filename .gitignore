@@ -1,3 +1,7 @@
 /__pycache__
 /misc
 /archive
+*.jpg 
+*.jpeg 
+*.png 
+*.txt 

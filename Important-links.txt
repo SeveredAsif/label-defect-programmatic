@@ -1,0 +1,9 @@
+https://www.kaggle.com/datasets/aliasifkhan131/label-fault/versions/1 : label dataset
+
+https://www.kaggle.com/code/aliasifkhan2105131/resnet50-train/ : classifier train
+
+https://www.kaggle.com/datasets/aliasifkhan2105131/label-fault-merged-more : label dataset - merged 
+
+https://claude.ai/code/artifact/5fbb1d25-5732-46dc-b069-2124355a4835 - what got fixed 
+
+https://claude.ai/code/artifact/d2f1112a-779c-4d5b-a33b-bb4d13eafc39 - analysis of scores  

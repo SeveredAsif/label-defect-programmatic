@@ -35,7 +35,7 @@ import numpy as np
 import demov2 as evaluation
 from pipeline import LabelInspector
 
-V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation"))
+V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_final"))
 evaluation.OUT_DIR = V3_DIR
 evaluation.EVAL_DIR = V3_DIR
 evaluation.ALL_REPORTS_DIR = V3_DIR / "all_case_reports"

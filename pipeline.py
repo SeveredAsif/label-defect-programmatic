@@ -627,6 +627,27 @@ class ContentGate:
         if aligned_fg_frac > 0.5:
             aligned_fg = cv2.bitwise_not(aligned_fg)
 
+        # Despeckle BEFORE dilating: on a low-contrast/textured background
+        # (e.g. a dark ribbon on a wood-grain table), CLAHE equalization
+        # boosts local contrast in the background's own texture almost as
+        # much as in the label's weave, so Otsu misclassifies scattered
+        # background speckle as foreground. Dilating that speckle first (the
+        # old behavior) merges it into solid blobs and can swallow nearly
+        # the whole frame as "foreground" (observed: ~95-99% on a sample
+        # with a wood-grain backdrop, vs ~30% on a plain-backdrop sample).
+        # An opening first strips the isolated speckle while leaving the
+        # much larger, coherent label blob intact for the dilation to grow.
+        despeckle_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        golden_fg_opened = cv2.morphologyEx(golden_fg, cv2.MORPH_OPEN, despeckle_kernel)
+        aligned_fg_opened = cv2.morphologyEx(aligned_fg, cv2.MORPH_OPEN, despeckle_kernel)
+        # Guard: if the label itself is thin/small enough that opening wipes
+        # it out entirely, fall back to the pre-opening mask rather than
+        # comparing against nothing.
+        if self._foreground_area(golden_fg_opened) > 0:
+            golden_fg = golden_fg_opened
+        if self._foreground_area(aligned_fg_opened) > 0:
+            aligned_fg = aligned_fg_opened
+
         fg_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         golden_fg = cv2.dilate(golden_fg, fg_kernel, iterations=2)
         aligned_fg = cv2.dilate(aligned_fg, fg_kernel, iterations=2)
@@ -677,75 +698,6 @@ class ContentGate:
         kernel9 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
         combined = cv2.morphologyEx(step3_open, cv2.MORPH_CLOSE, kernel9, iterations=2)
 
-        # --- DEBUG PLOT: Step-by-Step Visualization ---
-        plt.figure(figsize=(15, 8))
-
-        plt.subplot(2, 3, 1)
-        plt.imshow(ssim_defect_mask, cmap='gray')
-        plt.title("1. SSIM Defects")
-        plt.axis('off')
-
-        plt.subplot(2, 3, 2)
-        plt.imshow(diff_thresh, cmap='gray')
-        plt.title("2. Diff Threshold Defects")
-        plt.axis('off')
-
-        plt.subplot(2, 3, 3)
-        plt.imshow(step1_or, cmap='gray')
-        plt.title("3. Combined (bitwise_or)")
-        plt.axis('off')
-
-        plt.subplot(2, 3, 4)
-        plt.imshow(step2_and, cmap='gray')
-        plt.title("4. Clipped to Foreground (bitwise_and)")
-        plt.axis('off')
-
-        plt.subplot(2, 3, 5)
-        plt.imshow(step3_open, cmap='gray')
-        plt.title("5. Noise Removed (MORPH_OPEN)")
-        plt.axis('off')
-
-        plt.subplot(2, 3, 6)
-        plt.imshow(combined, cmap='gray')
-        plt.title("6. Final Mask (MORPH_CLOSE)")
-        plt.axis('off')
-
-        plt.tight_layout()
-        # Non-interactive batch runs save diagnostics from demov2.py; do not
-        # block each evaluation case on a GUI window here.
-        #plt.show()
-        plt.close()
-
-#-------------------------------------------------------------------------------------
-        # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        # golden_fg = cv2.dilate(golden_fg, kernel, iterations=2)  # generous margin
-
-        # combined = cv2.bitwise_or(ssim_defect_mask, diff_thresh)
-        # combined = cv2.bitwise_and(combined, golden_fg)
-        # combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN,
-        #                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
-        # combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE,
-        #                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9)),
-        #                              iterations=2)
-#---------------------------------------------------------------------------------------------
-        # Convert grayscale combined mask to 3-channel BGR so we can stack it with color images
-        # combined_bgr = cv2.cvtColor(combined, cv2.COLOR_GRAY2BGR)
-
-        # # Stack images horizontally: Golden | Aligned Candidate | Combined Defect Mask
-        # debug_view = np.hstack((golden_bgr, aligned_bgr, combined_bgr))
-
-        # # Resize down if the images are too large for your screen
-        # h_disp, w_disp = debug_view.shape[:2]
-        # if w_disp > 1600:
-        #     scale = 1600 / w_disp
-        #     debug_view = cv2.resize(debug_view, (0, 0), fx=scale, fy=scale)
-
-
-        # cv2.imshow("Debug: Golden vs Aligned Candidate vs Combined Mask", debug_view)
-        # cv2.waitKey(0)  # Press any key to close
-        # cv2.destroyAllWindows()
-
-        #-----------------------------------------------------------------------------------
         combined_with_boxes = cv2.cvtColor(combined, cv2.COLOR_GRAY2BGR)
         contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         hotspots: List[HotSpot] = []
@@ -775,7 +727,6 @@ class ContentGate:
 
         hotspot_area = sum(hs.area for hs in hotspots)
         reject_hotspot_area = max(self.min_hotspot_area * 3, int(0.01 * self._foreground_area(comparison_mask)))
-        high_ssim_hotspot_count = 10
 
         # -- Severity score: area-weighted local dissimilarity, independent of the
         # global SSIM value. This is what actually catches a localized real defect
@@ -814,10 +765,14 @@ class ContentGate:
                     f"Overall SSIM {ssim_score:.3f} is below threshold, but hotspot evidence is too small "
                     f"({hotspot_area}px < {reject_hotspot_area}px) to reject."
                 )
-        elif len(hotspots) >= high_ssim_hotspot_count:
-            reasons.append(
-                f"High-SSIM sample still has {len(hotspots)} hot spots — likely a real defect cluster."
-            )
+        # NOTE: a "hotspot count >= 10" reject trigger used to live here. It
+        # was dropped: TP/TN hotspot-count distributions overlap too heavily
+        # to discriminate real defects from registration/alignment noise
+        # (observed means ~8 vs ~6-7), and on this dataset it was the
+        # dominant cause of false positives (e.g. 13/13 of sample2's
+        # remaining FPs had no other trigger fire). severity_frac,
+        # max_hotspot_frac and diff_severity_frac below already catch
+        # genuine concentrated defects without needing a raw hotspot count.
 
         severity_reject = severity_frac >= self.severity_frac_reject_threshold
         diff_severity_reject = diff_severity_frac >= self.diff_severity_frac_reject_threshold
@@ -843,7 +798,6 @@ class ContentGate:
 
         passed = not (
             (ssim_score < self.overall_ssim_reject_threshold and hotspot_area >= reject_hotspot_area)
-            or (len(hotspots) >= high_ssim_hotspot_count)
             or severity_reject
             or max_hotspot_reject
             or diff_severity_reject
