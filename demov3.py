@@ -35,7 +35,7 @@ import numpy as np
 import demov2 as evaluation
 from pipeline import LabelInspector
 
-V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_final"))
+V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_REPORT"))
 evaluation.OUT_DIR = V3_DIR
 evaluation.EVAL_DIR = V3_DIR
 evaluation.ALL_REPORTS_DIR = V3_DIR / "all_case_reports"
@@ -57,6 +57,28 @@ evaluation.HARD_MISTAKES_PATH = V3_DIR / "hardest_mistakes_v3.csv"
 
 MIN_CROP_DIM = 20  # px; smaller than this is a cropping-script artifact, not a real label photo
 
+# Per-sample cap on how many golden/faulty cases get evaluated, so a sample
+# with abundant real photos (e.g. sample1's 44 real faulty images) doesn't
+# blow past a sample that only has the augmented top-up (e.g. 20). Set to
+# None to disable and evaluate every available image, as before. Matches
+# the targets `generate_augmented_dataset.py` tops each sample up to, so
+# together they produce a controlled, predictable total
+# (5 samples x (40 golden + 20 faulty) = 300 evaluations, 100 golden-vs-
+# faulty comparisons).
+MAX_GOLDEN_PER_SAMPLE = int(os.environ.get("LABEL_MAX_GOLDEN_PER_SAMPLE", "40"))
+MAX_FAULTY_PER_SAMPLE = int(os.environ.get("LABEL_MAX_FAULTY_PER_SAMPLE", "20"))
+
+
+def _cap(paths, max_count, sample_name, kind):
+    if max_count is None or len(paths) <= max_count:
+        return paths
+    rng = np.random.default_rng(evaluation.stable_seed(f"{sample_name}_{kind}_cap"))
+    idx = rng.choice(len(paths), size=max_count, replace=False)
+    idx.sort()
+    kept = [paths[i] for i in idx]
+    print(f"{sample_name}: capping {kind} from {len(paths)} to {max_count} (deterministic random subset)")
+    return kept
+
 
 def _is_usable_crop(path):
     img = cv2.imread(str(path))
@@ -70,9 +92,25 @@ def collect_sample_dirs():
     return [d for d in sorted(evaluation.DATASET_ROOT.iterdir()) if d.is_dir()]
 
 
-def load_golden_paths(sample_dir):
+def find_faulty_dir(sample_dir):
+    """The sample's real-faulty-photos folder (named `faulty` or
+    `*_faulty`) — kept separate from the `faulty_augmented/<technique>/`
+    folders generate_augmented_dataset.py writes to, so real and augmented
+    images are never mixed in the same directory."""
+    for d in sorted(sample_dir.iterdir()):
+        if d.is_dir() and (d.name.lower().endswith("_faulty") or d.name.lower() == "faulty"):
+            return d
+    return None
+
+
+def _collect_usable(folder):
+    """All usable image files directly inside `folder`, recursing into
+    subfolders (e.g. `golden_augmented/<technique>/...`) — degenerate/
+    unreadable crops are skipped with a note."""
+    if not folder.exists():
+        return []
     paths = sorted(
-        p for p in (sample_dir / "golden").iterdir()
+        p for p in folder.rglob("*")
         if p.is_file() and p.suffix.lower() in evaluation.EXTENSIONS
     )
     usable = [p for p in paths if _is_usable_crop(p)]
@@ -82,20 +120,24 @@ def load_golden_paths(sample_dir):
     return usable
 
 
+def load_golden_paths(sample_dir):
+    """Real goldens (`golden/`) plus any augmented golden variants
+    (`golden_augmented/<technique>/`, produced by
+    generate_augmented_dataset.py — never mixed into `golden/` itself)."""
+    paths = _collect_usable(sample_dir / "golden")
+    paths += _collect_usable(sample_dir / "golden_augmented")
+    return sorted(paths)
+
+
 def load_faulty_cases(sample_dir):
-    cases = []
-    faulty_dirs = [
-        d for d in sorted(sample_dir.iterdir())
-        if d.is_dir() and (d.name.lower().endswith("_faulty") or d.name.lower() == "faulty")
-    ]
-    for faulty_dir in faulty_dirs:
-        for p in sorted(faulty_dir.iterdir()):
-            if p.is_file() and p.suffix.lower() in evaluation.EXTENSIONS:
-                if _is_usable_crop(p):
-                    cases.append(p)
-                else:
-                    print(f"Skipping degenerate crop (too small / unreadable): {p}")
-    return cases
+    """Real faulty photos plus any augmented faulty variants
+    (`faulty_augmented/<technique>/`, produced by
+    generate_augmented_dataset.py — never mixed into the real faulty
+    folder itself)."""
+    faulty_dir = find_faulty_dir(sample_dir)
+    cases = _collect_usable(faulty_dir) if faulty_dir is not None else []
+    cases += _collect_usable(sample_dir / "faulty_augmented")
+    return sorted(cases)
 
 
 def estimate_target_size_median(golden_bgr_list):
@@ -139,10 +181,11 @@ def main():
 
     for sample_dir in sample_dirs:
         golden_paths = load_golden_paths(sample_dir)
-        if len(golden_paths) < 2:
-            print(f"Skipping {sample_dir.name}: need >=2 real goldens for leave-one-out, found {len(golden_paths)}")
+        if len(golden_paths) == 0:
+            print(f"Skipping {sample_dir.name}: no usable golden images found.")
             continue
-        faulty_paths = load_faulty_cases(sample_dir)
+        golden_paths = _cap(golden_paths, MAX_GOLDEN_PER_SAMPLE, sample_dir.name, "golden")
+        faulty_paths = _cap(load_faulty_cases(sample_dir), MAX_FAULTY_PER_SAMPLE, sample_dir.name, "faulty")
 
         golden_imgs = {p: evaluation.load(p) for p in golden_paths}
         target_size = estimate_target_size_median(list(golden_imgs.values()))
@@ -159,16 +202,31 @@ def main():
         )
 
         cases = []
-        for golden_path in golden_paths:
-            reference_paths = [p for p in golden_paths if p != golden_path]
-            cases.append(
-                {
-                    "set_name": f"{evaluation.slugify(sample_dir.name)}__golden_{golden_path.stem}",
-                    "expected": "clean",
-                    "source_kind": "golden",
-                    "candidate_path": golden_path,
-                    "reference_imgs": [golden_imgs[p] for p in reference_paths],
-                }
+        if len(golden_paths) >= 2:
+            # Leave-one-out: each golden is tested as a "clean" candidate
+            # against the *rest* of the sample's real goldens.
+            for golden_path in golden_paths:
+                reference_paths = [p for p in golden_paths if p != golden_path]
+                cases.append(
+                    {
+                        "set_name": f"{evaluation.slugify(sample_dir.name)}__golden_{golden_path.stem}",
+                        "expected": "clean",
+                        "source_kind": "golden",
+                        "candidate_path": golden_path,
+                        "reference_imgs": [golden_imgs[p] for p in reference_paths],
+                    }
+                )
+        else:
+            # Only one golden in this sample: there's nothing to hold it out
+            # against (leave-one-out needs >=2), so there's no meaningful
+            # "clean" self-consistency case to generate here — comparing the
+            # lone golden to itself would trivially always pass and wouldn't
+            # tell us anything. Faulty cases below still get tested normally
+            # against this single golden.
+            print(
+                f"{sample_dir.name}: only 1 golden found; skipping leave-one-out "
+                f"clean-case test (nothing to hold out against). Faulty cases "
+                f"will still be tested against it."
             )
         for faulty_path in faulty_paths:
             cases.append(
@@ -201,6 +259,7 @@ def main():
                 set_name, matched_golden, candidate, report, all_case_path, mirror_paths=mirror_paths
             )
 
+            g2 = report.gate2
             records.append(
                 {
                     "case_name": set_name,
@@ -213,10 +272,16 @@ def main():
                     "golden": f"best_of(n={len(item['reference_imgs'])})",
                     "candidate": str(item["candidate_path"]),
                     "report_path": out_path,
-                    "ssim_score": f"{report.gate2.ssim_score:.6f}" if report.gate2 and report.gate2.ssim_score is not None else "",
-                    "num_hotspots": len(report.gate2.hotspots) if report.gate2 is not None else 0,
+                    "ssim_score": f"{g2.ssim_score:.6f}" if g2 and g2.ssim_score is not None else "",
+                    "num_hotspots": len(g2.hotspots) if g2 is not None else 0,
                     "gate1_passed": report.gate1.passed,
-                    "gate2_passed": report.gate2.passed if report.gate2 is not None else "",
+                    "gate2_passed": g2.passed if g2 is not None else "",
+                    "num_good_matches": g2.num_good_matches if g2 is not None else "",
+                    "severity_frac": f"{g2.severity_frac:.6f}" if g2 and g2.severity_frac is not None else "",
+                    "diff_severity_frac": f"{g2.diff_severity_frac:.6f}" if g2 and g2.diff_severity_frac is not None else "",
+                    "max_hotspot_area_frac": f"{g2.max_hotspot_area_frac:.6f}" if g2 and g2.max_hotspot_area_frac is not None else "",
+                    "hotspot_area_frac": f"{g2.hotspot_area_frac:.6f}" if g2 and g2.hotspot_area_frac is not None else "",
+                    "reasons": " | ".join(g2.reasons) if g2 is not None else "",
                 }
             )
 
@@ -249,7 +314,8 @@ def main():
     fieldnames = [
         "case_name", "expected", "predicted", "outcome", "stage", "source_kind",
         "brand", "golden", "candidate", "report_path", "ssim_score", "num_hotspots",
-        "gate1_passed", "gate2_passed",
+        "gate1_passed", "gate2_passed", "num_good_matches", "severity_frac",
+        "diff_severity_frac", "max_hotspot_area_frac", "hotspot_area_frac", "reasons",
     ]
     evaluation.write_csv(evaluation.PREDICTIONS_PATH, fieldnames, records)
     evaluation.write_csv(
