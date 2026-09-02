@@ -35,7 +35,7 @@ import numpy as np
 import demov2 as evaluation
 from pipeline import LabelInspector
 
-V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_AFTER_BLACK_20_p"))
+V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_SINGLE_GOLDEN_AUGMENT_FIX"))
 evaluation.OUT_DIR = V3_DIR
 evaluation.EVAL_DIR = V3_DIR
 evaluation.ALL_REPORTS_DIR = V3_DIR / "all_case_reports"
@@ -97,6 +97,43 @@ def _adaptive_threshold(baseline_values, global_threshold):
         return global_threshold
     baseline_max = max(baseline_values)
     return min(global_threshold, max(floor, baseline_max * ADAPTIVE_SAFETY_MULTIPLIER))
+
+
+# Real deployments won't always have >=2 independent golden photos per
+# sample to leave-one-out probe a noise floor from (see MIN_PROBE_SAMPLES
+# below) -- a fresh label design often launches with exactly one reference
+# photo. Rather than silently falling back to the (too-loose-for-a-clean-
+# label) global default in that case, top the probe pool up with small,
+# realistic photographic perturbations (rotation/brightness/blur+noise/
+# perspective/color -- the same `demov2.augment_golden` techniques
+# generate_augmented_dataset.py uses) of whatever real golden(s) ARE
+# available. These synthetic images are generated in memory purely to
+# estimate this sample's own severity_frac/diff_severity_frac noise floor
+# for calibrating the reject threshold -- they are never added to the
+# actual reference pool the pipeline matches real candidates against.
+MIN_PROBE_SAMPLES = int(os.environ.get("LABEL_MIN_PROBE_SAMPLES", "8"))
+SYNTHETIC_PROBE_COUNT = int(os.environ.get("LABEL_SYNTHETIC_PROBE_COUNT", "16"))
+
+
+def synthesize_probe_goldens(real_golden_paths, count, tag):
+    """Generate `count` synthetic photographic-noise variants of whatever
+    real golden(s) are available, cycling through techniques/goldens/seed
+    batches until `count` is reached. In-memory only, nothing written to
+    disk."""
+    out = []
+    batch = 0
+    while len(out) < count and batch < 50:
+        for p in real_golden_paths:
+            if len(out) >= count:
+                break
+            raw = evaluation.load(p)
+            seed_text = f"{tag}_{p.stem}_probe_batch{batch}"
+            for _name, aug_img in evaluation.augment_golden(raw, seed_text, count=5):
+                if len(out) >= count:
+                    break
+                out.append(aug_img)
+        batch += 1
+    return out
 
 
 def _cap(paths, max_count, sample_name, kind):
@@ -286,6 +323,27 @@ def main():
                 if g2.diff_severity_frac is not None:
                     diff_baseline.append(g2.diff_severity_frac)
 
+        n_real_probes = len(severity_baseline)
+        n_synthetic_probes = 0
+        if len(severity_baseline) < MIN_PROBE_SAMPLES:
+            synthetic_imgs = synthesize_probe_goldens(golden_paths, SYNTHETIC_PROBE_COUNT, sample_dir.name)
+            reference_pool = list(golden_imgs.values())
+            for synth in synthetic_imgs:
+                probe_report, _ = best_match_report(inspector, reference_pool, synth)
+                g2 = probe_report.gate2
+                if g2 is not None:
+                    if g2.severity_frac is not None:
+                        severity_baseline.append(g2.severity_frac)
+                    if g2.diff_severity_frac is not None:
+                        diff_baseline.append(g2.diff_severity_frac)
+            n_synthetic_probes = len(synthetic_imgs)
+            print(
+                f"{sample_dir.name}: only {n_real_probes} real leave-one-out probe(s) available "
+                f"(< {MIN_PROBE_SAMPLES}) -- topped up with {n_synthetic_probes} synthetic photographic "
+                f"perturbations of the {len(golden_paths)} available golden(s), for threshold calibration "
+                f"only (not added to the matching reference pool)."
+            )
+
         global_severity_threshold = inspector.gate2.severity_frac_reject_threshold
         global_diff_threshold = inspector.gate2.diff_severity_frac_reject_threshold
         adaptive_severity = _adaptive_threshold(severity_baseline, global_severity_threshold)
@@ -306,6 +364,8 @@ def main():
             {
                 "brand": sample_dir.name,
                 "n_clean_probes": len(severity_baseline),
+                "n_real_probes": n_real_probes,
+                "n_synthetic_probes": n_synthetic_probes,
                 "global_severity_frac_threshold": global_severity_threshold,
                 "clean_severity_frac_max": max(severity_baseline) if severity_baseline else "",
                 "adaptive_severity_frac_threshold": adaptive_severity,
@@ -408,7 +468,7 @@ def main():
     evaluation.write_csv(
         threshold_path,
         [
-            "brand", "n_clean_probes",
+            "brand", "n_clean_probes", "n_real_probes", "n_synthetic_probes",
             "global_severity_frac_threshold", "clean_severity_frac_max", "adaptive_severity_frac_threshold",
             "global_diff_severity_frac_threshold", "clean_diff_severity_frac_max", "adaptive_diff_severity_frac_threshold",
         ],

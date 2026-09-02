@@ -19,6 +19,7 @@ from the golden sample itself, since we only have single examples.
 """
 
 import os
+from pathlib import Path
 import cv2
 import numpy as np
 import matplotlib
@@ -26,6 +27,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from pipeline import LabelInspector, StructuralGate
+import demov3
 
 UPLOAD_DIR = "label_dataset/label_dataset"
 OUT_DIR = "./brute"
@@ -33,8 +35,8 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 SETS = {
     "Zara_1": {
-        "golden": os.path.join("cropped_kabir_golden_faulty_folderwise\sample1\golden\WhatsApp Image 2026-08-01 at 16.14.38__crop_02.jpeg"),
-        "candidate": os.path.join("cropped_kabir_golden_faulty_folderwise\sample1\golden\WhatsApp Image 2026-08-01 at 16.14.41__crop_02.jpeg"),
+        "golden": r"F:\label_defect\single_golden_test_input\zara\golden\golden.jpg",
+        "candidate": r"F:\label_defect\single_golden_test_input\zara\faulty\CamScanner 07-04-2026 12.23_5.jpg",
     },
 }
 
@@ -141,7 +143,8 @@ def visualize(set_name, golden_bgr, candidate_bgr, report):
 
 def main():
     for set_name, paths in SETS.items():
-        golden = load(paths["golden"])
+        golden_path = Path(paths["golden"])
+        golden = load(str(golden_path))
         candidate = load(paths["candidate"])
 
         target_size = estimate_target_size(golden)
@@ -156,6 +159,38 @@ def main():
                 min_hotspot_area=25,
                 overall_ssim_reject_threshold=0.80,
             ),
+        )
+
+        # -- Per-sample adaptive severity threshold (same mechanism as
+        # demov3.py) -- a single global severity_frac/diff_severity_frac
+        # threshold is tuned to sit above the noisiest sample's own clean-
+        # photo baseline, which silently misses real defects on cleaner
+        # labels (this is exactly what caused this script's earlier FN).
+        # With only one golden here, there's no real leave-one-out data to
+        # probe, so calibrate from synthetic photographic-noise variants
+        # of that one golden instead (in-memory only, never added to the
+        # actual reference used for inspection).
+        synthetic_imgs = demov3.synthesize_probe_goldens([golden_path], demov3.SYNTHETIC_PROBE_COUNT, set_name)
+        severity_baseline, diff_baseline = [], []
+        for synth in synthetic_imgs:
+            probe_report, _ = demov3.best_match_report(inspector, [golden], synth)
+            g2 = probe_report.gate2
+            if g2 is not None:
+                if g2.severity_frac is not None:
+                    severity_baseline.append(g2.severity_frac)
+                if g2.diff_severity_frac is not None:
+                    diff_baseline.append(g2.diff_severity_frac)
+
+        global_sev = inspector.gate2.severity_frac_reject_threshold
+        global_diff = inspector.gate2.diff_severity_frac_reject_threshold
+        adaptive_sev = demov3._adaptive_threshold(severity_baseline, global_sev)
+        adaptive_diff = demov3._adaptive_threshold(diff_baseline, global_diff)
+        inspector.gate2.severity_frac_reject_threshold = adaptive_sev
+        inspector.gate2.diff_severity_frac_reject_threshold = adaptive_diff
+        print(
+            f"adaptive thresholds ({len(synthetic_imgs)} synthetic probes): "
+            f"severity_frac {global_sev:.4f} -> {adaptive_sev:.4f}; "
+            f"diff_severity_frac {global_diff:.4f} -> {adaptive_diff:.4f}"
         )
 
         report = inspector.inspect(golden, candidate)
