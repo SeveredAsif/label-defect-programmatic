@@ -100,6 +100,12 @@ class Gate2Result:
     max_hotspot_area_frac: Optional[float] = None
     severity_frac: Optional[float] = None
     diff_severity_frac: Optional[float] = None
+    missing_content_area_frac: Optional[float] = None
+    hotspot_area_px: Optional[int] = None
+    # Snapshot of the exact thresholds this result was judged against, so a
+    # saved report image (or any downstream consumer) can print "value
+    # (threshold X)" without needing the ContentGate instance around later.
+    thresholds: Optional[dict] = None
 
 
 @dataclass
@@ -318,6 +324,12 @@ class ContentGate:
         # (OR'd at reject time) rather than merged, so the report can tell you
         # which kind of evidence fired.
         diff_severity_frac_reject_threshold: float = 0.05,
+        # Fraction of the golden's own label area that must have zero
+        # corresponding candidate data (post a *confident* ORB+homography
+        # alignment) before it's treated as a decisive reject on its own
+        # rather than folded into severity_frac as one more hotspot. See
+        # the long comment at its use site in inspect() for why.
+        missing_content_frac_reject_threshold: float = 0.2,
     ):
         self.ssim_win_size = ssim_win_size
         self.ssim_defect_threshold = ssim_defect_threshold
@@ -328,6 +340,7 @@ class ContentGate:
         self.severity_frac_reject_threshold = severity_frac_reject_threshold
         self.max_hotspot_frac_reject_threshold = max_hotspot_frac_reject_threshold
         self.diff_severity_frac_reject_threshold = diff_severity_frac_reject_threshold
+        self.missing_content_frac_reject_threshold = missing_content_frac_reject_threshold
         self.orb = cv2.ORB_create(nfeatures=orb_features)
 
     # -- Step 1: Alignment / Registration -----------------------------------
@@ -687,6 +700,44 @@ class ContentGate:
         if self._foreground_area(comparison_mask) == 0:
             comparison_mask = golden_fg
 
+        # "Missing content" hard reject: warpPerspective/warpAffine fill any
+        # pixel outside the candidate's actual field of view with pure
+        # black (borderValue=(0,0,0)) — real photographed fabric never
+        # lands on exactly (0,0,0), so this reliably distinguishes "no
+        # source data here" from "legitimately dark content". When ORB
+        # found a *confident* direct registration (H is not None — real
+        # matched features, not the coarse minAreaRect fallback) and that
+        # registration still leaves a chunk of the golden's label content
+        # with no corresponding candidate pixels, that's not
+        # alignment noise: it means the candidate's photo simply doesn't
+        # cover part of the label the golden does, which for a
+        # continuously-printed ribbon is itself a physical defect signature
+        # (print rolled around / label cut short). Earlier this was folded
+        # in as one more severity-weighted hotspot among several, but that
+        # let the "best of many goldens" search dilute it away — a decisive
+        # miss belongs in the same evidence pool as a decisive match, so this
+        # rejects immediately instead, independent of severity_frac/
+        # diff_severity_frac/max_hotspot_area_frac.
+        no_data_mask = (np.all(aligned_bgr == 0, axis=2).astype(np.uint8)) * 255
+        missing_content_mask = cv2.bitwise_and(golden_fg, no_data_mask)
+        missing_content_area = self._foreground_area(missing_content_mask)
+        golden_fg_area_raw = max(1, self._foreground_area(golden_fg))
+        missing_content_area_frac = missing_content_area / golden_fg_area_raw
+        missing_content_reject_area = max(
+            self.min_hotspot_area * 3,
+            int(self.missing_content_frac_reject_threshold * golden_fg_area_raw),
+        )
+        orb_confident = H is not None
+        missing_content_reject = orb_confident and missing_content_area >= missing_content_reject_area
+        if missing_content_reject:
+            reasons.append(
+                f"Confident ORB alignment ({n_matches} matches) leaves {missing_content_area}px "
+                f"({100 * missing_content_area / golden_fg_area_raw:.1f}% of the label) of the golden's "
+                f"content with no corresponding candidate data — the candidate's photo doesn't cover part "
+                f"of the label the golden shows, consistent with a cut/rolled print defect. Rejected "
+                f"immediately, independent of severity/diff scores."
+            )
+
         mask_for_ssim = cv2.erode(
             comparison_mask,
             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
@@ -833,6 +884,7 @@ class ContentGate:
             or severity_reject
             or max_hotspot_reject
             or diff_severity_reject
+            or missing_content_reject
         )
 
         return Gate2Result(
@@ -850,6 +902,16 @@ class ContentGate:
             max_hotspot_area_frac=float(max_hotspot_frac),
             severity_frac=float(severity_frac),
             diff_severity_frac=float(diff_severity_frac),
+            missing_content_area_frac=float(missing_content_area_frac),
+            hotspot_area_px=int(hotspot_area),
+            thresholds={
+                "overall_ssim_reject_threshold": self.overall_ssim_reject_threshold,
+                "severity_frac_reject_threshold": self.severity_frac_reject_threshold,
+                "max_hotspot_frac_reject_threshold": self.max_hotspot_frac_reject_threshold,
+                "diff_severity_frac_reject_threshold": self.diff_severity_frac_reject_threshold,
+                "missing_content_frac_reject_threshold": self.missing_content_frac_reject_threshold,
+                "reject_hotspot_area_px": int(reject_hotspot_area),
+            },
         )
 
 

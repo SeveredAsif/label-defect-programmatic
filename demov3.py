@@ -35,7 +35,7 @@ import numpy as np
 import demov2 as evaluation
 from pipeline import LabelInspector
 
-V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_REPORT"))
+V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_AFTER_BLACK_20_p"))
 evaluation.OUT_DIR = V3_DIR
 evaluation.EVAL_DIR = V3_DIR
 evaluation.ALL_REPORTS_DIR = V3_DIR / "all_case_reports"
@@ -67,6 +67,36 @@ MIN_CROP_DIM = 20  # px; smaller than this is a cropping-script artifact, not a 
 # faulty comparisons).
 MAX_GOLDEN_PER_SAMPLE = int(os.environ.get("LABEL_MAX_GOLDEN_PER_SAMPLE", "40"))
 MAX_FAULTY_PER_SAMPLE = int(os.environ.get("LABEL_MAX_FAULTY_PER_SAMPLE", "20"))
+
+# -- Per-sample adaptive severity thresholds -------------------------------
+# A single global severity_frac/diff_severity_frac reject threshold has to
+# sit above the noisiest sample's own clean-photo baseline (sample1/2/6 can
+# hit ~0.10-0.12 from handheld lighting/framing jitter alone) or it false-
+# positives constantly. But a very clean, low-noise label like zara has a
+# clean baseline near 0.00, so its real defects (~0.06) sit comfortably
+# *below* that same global threshold and are silently missed (FN).
+#
+# Fix: before scoring a sample's faulty cases, probe that sample's own
+# leave-one-out golden-vs-golden severity distribution (already computed as
+# part of the normal "clean case" pass) and tighten the reject threshold
+# toward `max(clean baseline) * safety_multiplier` — but never past (looser
+# than) the existing global default. This can only make a sample's
+# effective threshold tighter than today, never looser, so it can't
+# introduce new false positives on samples whose noise floor is already
+# close to the global threshold (sample1/2/6); it only recovers sensitivity
+# for samples whose noise floor is far below it (zara/zara_narrow).
+ADAPTIVE_FLOOR_FRACTION = float(os.environ.get("LABEL_ADAPTIVE_FLOOR_FRACTION", "0.15"))
+ADAPTIVE_SAFETY_MULTIPLIER = float(os.environ.get("LABEL_ADAPTIVE_SAFETY_MULTIPLIER", "1.5"))
+
+
+def _adaptive_threshold(baseline_values, global_threshold):
+    """min(global, max(floor, baseline_max * safety_multiplier)) — tightens
+    only, never loosens past `global_threshold`."""
+    floor = ADAPTIVE_FLOOR_FRACTION * global_threshold
+    if not baseline_values:
+        return global_threshold
+    baseline_max = max(baseline_values)
+    return min(global_threshold, max(floor, baseline_max * ADAPTIVE_SAFETY_MULTIPLIER))
 
 
 def _cap(paths, max_count, sample_name, kind):
@@ -177,6 +207,7 @@ def main():
 
     chunks = []
     records = []
+    threshold_records = []
     category_examples = defaultdict(int)
 
     for sample_dir in sample_dirs:
@@ -238,6 +269,51 @@ def main():
                     "reference_imgs": list(golden_imgs.values()),
                 }
             )
+
+        # Probe this sample's own clean-photo noise floor (leave-one-out
+        # golden-vs-golden severity/diff_severity) and tighten the reject
+        # thresholds toward it, never looser than the global default. See
+        # the ADAPTIVE_* comment above for why.
+        golden_clean_cases = [c for c in cases if c["source_kind"] == "golden"]
+        severity_baseline, diff_baseline = [], []
+        for item in golden_clean_cases:
+            probe_candidate = evaluation.load(item["candidate_path"])
+            probe_report, _ = best_match_report(inspector, item["reference_imgs"], probe_candidate)
+            g2 = probe_report.gate2
+            if g2 is not None:
+                if g2.severity_frac is not None:
+                    severity_baseline.append(g2.severity_frac)
+                if g2.diff_severity_frac is not None:
+                    diff_baseline.append(g2.diff_severity_frac)
+
+        global_severity_threshold = inspector.gate2.severity_frac_reject_threshold
+        global_diff_threshold = inspector.gate2.diff_severity_frac_reject_threshold
+        adaptive_severity = _adaptive_threshold(severity_baseline, global_severity_threshold)
+        adaptive_diff = _adaptive_threshold(diff_baseline, global_diff_threshold)
+        inspector.gate2.severity_frac_reject_threshold = adaptive_severity
+        inspector.gate2.diff_severity_frac_reject_threshold = adaptive_diff
+
+        sev_base_str = f"{max(severity_baseline):.4f}" if severity_baseline else "n/a"
+        diff_base_str = f"{max(diff_baseline):.4f}" if diff_baseline else "n/a"
+        print(
+            f"{sample_dir.name}: adaptive thresholds -- "
+            f"severity_frac {global_severity_threshold:.4f} -> {adaptive_severity:.4f} "
+            f"(clean baseline max {sev_base_str}, n={len(severity_baseline)}); "
+            f"diff_severity_frac {global_diff_threshold:.4f} -> {adaptive_diff:.4f} "
+            f"(clean baseline max {diff_base_str})"
+        )
+        threshold_records.append(
+            {
+                "brand": sample_dir.name,
+                "n_clean_probes": len(severity_baseline),
+                "global_severity_frac_threshold": global_severity_threshold,
+                "clean_severity_frac_max": max(severity_baseline) if severity_baseline else "",
+                "adaptive_severity_frac_threshold": adaptive_severity,
+                "global_diff_severity_frac_threshold": global_diff_threshold,
+                "clean_diff_severity_frac_max": max(diff_baseline) if diff_baseline else "",
+                "adaptive_diff_severity_frac_threshold": adaptive_diff,
+            }
+        )
 
         for item in cases:
             set_name = item["set_name"]
@@ -328,12 +404,24 @@ def main():
     mistakes.sort(key=evaluation.mistake_score, reverse=True)
     evaluation.write_csv(evaluation.HARD_MISTAKES_PATH, fieldnames, mistakes)
 
+    threshold_path = V3_DIR / "sample_adaptive_thresholds.csv"
+    evaluation.write_csv(
+        threshold_path,
+        [
+            "brand", "n_clean_probes",
+            "global_severity_frac_threshold", "clean_severity_frac_max", "adaptive_severity_frac_threshold",
+            "global_diff_severity_frac_threshold", "clean_diff_severity_frac_max", "adaptive_diff_severity_frac_threshold",
+        ],
+        threshold_records,
+    )
+
     print(summary_text)
     print()
     print(f"Consolidated report saved -> {evaluation.REPORT_PATH}")
     print(f"Predictions CSV saved -> {evaluation.PREDICTIONS_PATH}")
     print(f"Classification summary saved -> {evaluation.CLASSIFICATION_REPORT_PATH}")
     print(f"Mistakes report saved -> {evaluation.HARD_MISTAKES_PATH}")
+    print(f"Per-sample adaptive thresholds saved -> {threshold_path}")
 
 
 if __name__ == "__main__":

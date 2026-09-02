@@ -218,9 +218,68 @@ def estimate_target_size(golden_bgr):
 #     return (min(w, h), max(w, h))
 
 
+def _param_lines(g2):
+    """One (text, fired) tuple per Gate-2 parameter, value alongside the
+    exact threshold it's judged against — 'fired' means this specific
+    condition is what's pushing the verdict toward reject, so the caller
+    can highlight it."""
+    th = g2.thresholds or {}
+    lines = []
+
+    ssim_fired = (
+        g2.ssim_score is not None and th.get("overall_ssim_reject_threshold") is not None
+        and g2.ssim_score < th["overall_ssim_reject_threshold"]
+        and g2.hotspot_area_px is not None and th.get("reject_hotspot_area_px") is not None
+        and g2.hotspot_area_px >= th["reject_hotspot_area_px"]
+    )
+    lines.append((
+        f"ssim_score = {g2.ssim_score:.3f}  (reject if < {th.get('overall_ssim_reject_threshold', '?')} "
+        f"AND hotspot_area >= {th.get('reject_hotspot_area_px', '?')}px)", ssim_fired,
+    ))
+    lines.append((f"hotspot_area = {g2.hotspot_area_px}px  (threshold {th.get('reject_hotspot_area_px', '?')}px, "
+                   f"paired with ssim_score above)", False))
+    lines.append((f"num_good_matches (ORB) = {g2.num_good_matches}  (informational; low count -> "
+                   f"geometric-alignment fallback used instead)", False))
+    lines.append((f"num_hotspots = {len(g2.hotspots)}  (informational only — not a reject trigger)", False))
+    lines.append((f"hotspot_area_frac = {g2.hotspot_area_frac:.3f}  (informational only — not a reject trigger)", False))
+
+    sev_thr = th.get("severity_frac_reject_threshold")
+    sev_fired = sev_thr is not None and g2.severity_frac is not None and g2.severity_frac >= sev_thr
+    lines.append((f"severity_frac = {g2.severity_frac:.3f}  (reject if >= {sev_thr})", sev_fired))
+
+    dsev_thr = th.get("diff_severity_frac_reject_threshold")
+    dsev_fired = dsev_thr is not None and g2.diff_severity_frac is not None and g2.diff_severity_frac >= dsev_thr
+    lines.append((f"diff_severity_frac = {g2.diff_severity_frac:.3f}  (reject if >= {dsev_thr})", dsev_fired))
+
+    mh_thr = th.get("max_hotspot_frac_reject_threshold")
+    mh_fired = mh_thr is not None and g2.max_hotspot_area_frac is not None and g2.max_hotspot_area_frac >= mh_thr
+    lines.append((f"max_hotspot_area_frac = {g2.max_hotspot_area_frac:.3f}  (reject if >= {mh_thr})", mh_fired))
+
+    mc_thr = th.get("missing_content_frac_reject_threshold")
+    mc_fired = "Confident ORB alignment" in " ".join(g2.reasons)
+    lines.append((
+        f"missing_content_area_frac = {g2.missing_content_area_frac:.3f}  (reject if >= {mc_thr}, "
+        f"only when ORB registration succeeded directly)", mc_fired,
+    ))
+    return lines
+
+
 def visualize(set_name, golden_bgr, candidate_bgr, report, out_path, mirror_paths=None,
               golden_label=None, candidate_label=None):
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    param_lines = _param_lines(report.gate2) if report.gate2 is not None else []
+    # Dedicated text row via GridSpec (not fig.text() + tight_layout guessing
+    # — that silently failed to reserve space and let the text overlap the
+    # image grid). Row height in inches scales with how many lines there
+    # are so the text panel never has to shrink/overlap either.
+    text_row_in = 0.62 + 0.235 * (len(param_lines) + 1)
+    image_rows_in = 9.0
+    fig_h = image_rows_in + text_row_in
+    fig = plt.figure(figsize=(15, fig_h))
+    gs = fig.add_gridspec(3, 3, height_ratios=[1, 1, text_row_in / (image_rows_in / 2)],
+                           hspace=0.35, wspace=0.15)
+    axes = np.array([[fig.add_subplot(gs[r, c]) for c in range(3)] for r in range(2)])
+    text_ax = fig.add_subplot(gs[2, :])
+    text_ax.axis("off")
     fig.suptitle(f"Label Inspection — {set_name} — verdict: {report.verdict}", fontsize=14)
 
     def show(ax, img_bgr, title, cmap=None):
@@ -271,7 +330,26 @@ def visualize(set_name, golden_bgr, candidate_bgr, report, out_path, mirror_path
             ax.axis("off")
             ax.set_title("Gate 2 skipped (Gate 1 rejected)")
 
-    plt.tight_layout()
+    # Full parameter dump in the reserved text row — every number that
+    # feeds a reject decision, value next to the exact threshold it's
+    # judged against, with the condition(s) actually pushing this verdict
+    # toward reject picked out in red so it's obvious at a glance why.
+    if param_lines:
+        text_ax.text(0.0, 1.0, "Gate 2 parameters (value, threshold in parentheses; red = this condition fired):",
+                     fontsize=9.5, fontfamily="monospace", fontweight="bold", color="#333333",
+                     transform=text_ax.transAxes, va="top")
+        n = len(param_lines)
+        for i, (text, fired) in enumerate(param_lines):
+            y = 1.0 - (i + 1.5) / (n + 1.5)
+            text_ax.text(0.01, y, text, fontsize=9, fontfamily="monospace",
+                         color="#c0392b" if fired else "#333333",
+                         fontweight="bold" if fired else "normal",
+                         transform=text_ax.transAxes, va="top")
+    else:
+        text_ax.text(0.0, 1.0, "Gate 2 skipped (Gate 1 rejected) — no parameters to show.",
+                     fontsize=9.5, fontfamily="monospace", color="#333333",
+                     transform=text_ax.transAxes, va="top")
+
     plt.savefig(str(out_path), dpi=130)
     for extra_path in mirror_paths or []:
         plt.savefig(str(extra_path), dpi=130)
