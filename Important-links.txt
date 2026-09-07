@@ -6,4 +6,9 @@ https://www.kaggle.com/datasets/aliasifkhan2105131/label-fault-merged-more : lab
 
 https://claude.ai/code/artifact/5fbb1d25-5732-46dc-b069-2124355a4835 - what got fixed 
 
-https://claude.ai/code/artifact/d2f1112a-779c-4d5b-a33b-bb4d13eafc39 - analysis of scores  
+https://claude.ai/code/artifact/d2f1112a-779c-4d5b-a33b-bb4d13eafc39 - analysis of scores
+
+
+https://claude.ai/code/artifact/3a99c0e0-e0e4-43c9-b47d-c2f176bf1947?via=auto_preview : comparison 
+https://claude.ai/code/artifact/3f2cca08-52ca-4ea8-a4fa-7289e2c86080?via=auto_preview : analysis of scores - all ds merged 
+https://claude.ai/code/artifact/7a29fe09-b460-4b10-9b91-1a7fc5145fe0?via=auto_preview : analysis of scores merged, v1 

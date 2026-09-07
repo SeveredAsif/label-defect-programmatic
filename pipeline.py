@@ -56,6 +56,7 @@ from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
+from collections import OrderedDict
 from skimage.metrics import structural_similarity as ssim
 
 
@@ -330,6 +331,12 @@ class ContentGate:
         # rather than folded into severity_frac as one more hotspot. See
         # the long comment at its use site in inspect() for why.
         missing_content_frac_reject_threshold: float = 0.2,
+        # Keep every intermediate mask/map from the last inspect() on the
+        # instance for debug plotting. Off by default: it pins ~15
+        # full-frame arrays (several MB) per instance, which is pure
+        # overhead in production and enough to matter on a memory-tight
+        # machine.
+        capture_debug: bool = False,
     ):
         self.ssim_win_size = ssim_win_size
         self.ssim_defect_threshold = ssim_defect_threshold
@@ -341,7 +348,48 @@ class ContentGate:
         self.max_hotspot_frac_reject_threshold = max_hotspot_frac_reject_threshold
         self.diff_severity_frac_reject_threshold = diff_severity_frac_reject_threshold
         self.missing_content_frac_reject_threshold = missing_content_frac_reject_threshold
+        self.capture_debug = capture_debug
         self.orb = cv2.ORB_create(nfeatures=orb_features)
+        self._cache = OrderedDict()
+
+    # -- Per-image memoization ---------------------------------------------
+    # A single candidate is compared against every golden in the reference
+    # set one at a time, so the candidate-side work (ORB keypoints, Otsu
+    # binarization, contour extraction) is recomputed identically on every
+    # one of those calls. Profiling put binarization+connected-components
+    # at ~20% and ORB detection at ~21% of each comparison, with
+    # StructuralGate._binarize alone running ~6.7x per inspect(). Caching
+    # on image *content* (not identity -- arrays get reallocated) makes
+    # every repeat a dict lookup. Keyed by a hash of the pixel bytes:
+    # ~30us to hash a 700x225 frame against ~35ms of work it skips.
+    def _memo(self, kind: str, arr: np.ndarray, compute):
+        key = (kind, arr.shape, hash(arr.tobytes()))
+        hit = self._cache.get(key)
+        if hit is not None:
+            self._cache.move_to_end(key)     # LRU: keep hot entries alive
+            return hit
+        value = compute()
+        # LRU eviction rather than a wholesale clear: the candidate's
+        # entries are touched on every comparison in a best-of-N sweep, so
+        # they must survive while the 40 goldens' one-shot entries churn
+        # past. A clear-on-full policy evicted exactly the entries worth
+        # keeping.
+        while len(self._cache) >= 8:        # bounded; these hold full frames
+            self._cache.popitem(last=False)
+        self._cache[key] = value
+        return value
+
+    def _dbg(self, name: str, arr):
+        """Record an intermediate mask/map, only when debug capture is on."""
+        if self.capture_debug and arr is not None:
+            self._debug[name] = arr.copy()
+
+    def _binarized(self, gray: np.ndarray) -> np.ndarray:
+        """Blur + StructuralGate._binarize, memoized per image."""
+        return self._memo(
+            "binarize", gray,
+            lambda: StructuralGate._binarize(cv2.GaussianBlur(gray, (5, 5), 0)),
+        )
 
     # -- Step 1: Alignment / Registration -----------------------------------
     @staticmethod
@@ -356,8 +404,7 @@ class ContentGate:
         th = cv2.dilate(th, kernel, iterations=2)
         return th
 
-    @staticmethod
-    def _tight_label_rect(gray: np.ndarray) -> Optional[Tuple]:
+    def _tight_label_rect(self, gray: np.ndarray) -> Optional[Tuple]:
         """The label's own minAreaRect ((cx,cy),(w,h),angle), via the same
         thresholding StructuralGate uses for Gate 1 (majority-aware, so it
         doesn't invert onto the background the way a naive '>0.6 -> invert'
@@ -365,8 +412,7 @@ class ContentGate:
         recover orientation geometrically when ORB has too few keypoints/
         matches to solve for it itself (common on this low-texture,
         repetitive-weave fabric)."""
-        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-        mask = StructuralGate._binarize(blurred)
+        mask = self._binarized(gray)
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return None
@@ -522,11 +568,15 @@ class ContentGate:
     def register(self, golden_gray: np.ndarray, candidate_gray: np.ndarray):
         h, w = golden_gray.shape[:2]
 
-        golden_fg = self._foreground_mask(golden_gray)
-        cand_fg = self._foreground_mask(candidate_gray)
+        golden_fg = self._memo("orb_fg", golden_gray, lambda: self._foreground_mask(golden_gray))
+        cand_fg = self._memo("orb_fg", candidate_gray, lambda: self._foreground_mask(candidate_gray))
 
-        kp1, des1 = self.orb.detectAndCompute(golden_gray, golden_fg)
-        kp2, des2 = self.orb.detectAndCompute(candidate_gray, cand_fg)
+        kp1, des1 = self._memo(
+            "orb", golden_gray, lambda: self.orb.detectAndCompute(golden_gray, golden_fg)
+        )
+        kp2, des2 = self._memo(
+            "orb", candidate_gray, lambda: self.orb.detectAndCompute(candidate_gray, cand_fg)
+        )
 
         if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
             return None, 0
@@ -563,6 +613,18 @@ class ContentGate:
             dst_pts, src_pts, method=cv2.RANSAC, ransacReprojThreshold=5.0
         )
         H_affine = np.vstack([A, [0, 0, 1]]).astype(np.float64) if A is not None else None
+
+        # NOTE: estimateAffinePartial2D can return a "successful" fit off as
+        # few as 2 RANSAC inliers -- the bare minimum for a 4-DOF similarity,
+        # with no redundancy to catch a wrong answer (observed: a 2-inlier fit
+        # giving a ~99 deg rotation, silently accepted). Gating on inlier
+        # count was tried and measured WORSE end-to-end: rejecting weak fits
+        # sends those pairs to the geometric fallback, which aligns clean
+        # golden-vs-golden pairs less well, which inflates the clean baseline
+        # the per-sample threshold is calibrated from -- raising the bar real
+        # defects must clear. On zara that raised the threshold 0.0225 ->
+        # 0.0523 against a defect signal of 0.042-0.070 and cost 7 true
+        # positives. Left ungated deliberately; see _adaptive_threshold.
 
         H_proj, proj_inlier_mask = cv2.findHomography(dst_pts, src_pts, cv2.RANSAC, 5.0)
         num_inliers = int(proj_inlier_mask.sum()) if proj_inlier_mask is not None else 0
@@ -604,9 +666,47 @@ class ContentGate:
 
     # -- Step 2: Perceptual comparison --------------------------------------
     def _ssim_map(self, golden_gray: np.ndarray, aligned_gray: np.ndarray):
-        score, full_map = ssim(
-            golden_gray, aligned_gray, win_size=self.ssim_win_size, full=True
+        """SSIM map + mean score, computed with OpenCV box filters.
+
+        Mathematically identical to
+        `skimage.metrics.structural_similarity(..., full=True)` for the
+        uniform-window (gaussian_weights=False) case used here -- same
+        unbiased covariance normalization, same C1/C2, same border
+        handling (scipy's 'reflect' == cv2.BORDER_REFLECT), and the same
+        border crop when averaging. Verified elementwise against skimage
+        on real sample data. Swapped in purely for speed: skimage routes
+        through scipy.ndimage.uniform_filter, which profiled as the single
+        largest cost in the whole comparison (~32%); cv2.boxFilter does the
+        same separable-window sum several times faster.
+        """
+        win = self.ssim_win_size
+        ksize = (win, win)
+        border = cv2.BORDER_REFLECT
+        X = golden_gray.astype(np.float64)
+        Y = aligned_gray.astype(np.float64)
+
+        def filt(img):
+            return cv2.boxFilter(img, -1, ksize, normalize=True, borderType=border)
+
+        ux, uy = filt(X), filt(Y)
+        uxx, uyy, uxy = filt(X * X), filt(Y * Y), filt(X * Y)
+
+        NR = win ** 2
+        cov_norm = NR / (NR - 1)                 # unbiased covariance
+        vx = cov_norm * (uxx - ux * ux)
+        vy = cov_norm * (uyy - uy * uy)
+        vxy = cov_norm * (uxy - ux * uy)
+
+        data_range = 255.0                        # uint8 inputs
+        C1 = (0.01 * data_range) ** 2
+        C2 = (0.03 * data_range) ** 2
+
+        full_map = ((2 * ux * uy + C1) * (2 * vxy + C2)) / (
+            (ux * ux + uy * uy + C1) * (vx + vy + C2)
         )
+
+        pad = (win - 1) // 2                      # skimage crops the border
+        score = float(full_map[pad:-pad, pad:-pad].mean()) if pad else float(full_map.mean())
         return score, full_map
 
     def _diff_map(self, golden_gray: np.ndarray, aligned_gray: np.ndarray):
@@ -658,15 +758,36 @@ class ContentGate:
         aligned_gray = self._to_gray_equalized(aligned_bgr)
         aligned_gray = self._match_illumination(golden_gray, aligned_gray)
 
+        # Build a shared foreground mask so SSIM is evaluated on the label
+        # content itself, not on background pixels or warp-induced border
+        # differences. This is the main guard against clean augmented samples
+        # looking artificially dissimilar.
+        #
+        # Extract each mask via the same connected-component-aware contour
+        # method _tight_label_rect/Gate 1 use (StructuralGate._binarize +
+        # largest-contour fill) on the RAW (pre-CLAHE) grayscale, rather
+        # than a raw per-pixel Otsu threshold on the CLAHE-equalized image
+        # -- the per-pixel version can't distinguish "this pixel happens to
+        # be bright/dark" from "this pixel is part of the label", so a
+        # textured background (wood grain under a dark ribbon) gets
+        # partially classified as foreground too. A single-largest-contour
+        # fill can't make that mistake: isolated background texture never
+        # forms one blob as large as the label itself.
         _, golden_fg = cv2.threshold(golden_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         golden_fg_frac = (golden_fg > 0).mean()
         if golden_fg_frac > 0.5:
             golden_fg = cv2.bitwise_not(golden_fg)
 
-        # Build a shared foreground mask so SSIM is evaluated on the label
-        # content itself, not on background pixels or warp-induced border
-        # differences. This is the main guard against clean augmented samples
-        # looking artificially dissimilar.
+        # Debug capture: every intermediate mask/map, keyed by pipeline
+        # step, stashed on the instance (never returned via Gate2Result,
+        # zero-cost for normal callers -- just a dict of small arrays
+        # overwritten every call). Lets a debug script render "what did
+        # each step actually produce" for a specific case without
+        # re-deriving the pipeline by hand and risking it drifting from
+        # what inspect() really does.
+        self._debug = {}
+        self._dbg("golden_fg_raw", golden_fg)
+
         _, aligned_fg = cv2.threshold(aligned_gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         aligned_fg_frac = (aligned_fg > 0).mean()
         if aligned_fg_frac > 0.5:
@@ -693,12 +814,19 @@ class ContentGate:
         if self._foreground_area(aligned_fg_opened) > 0:
             aligned_fg = aligned_fg_opened
 
+        self._dbg("aligned_fg_raw", aligned_fg)
+        self._dbg("golden_fg_despeckled", golden_fg)
+        self._dbg("aligned_fg_despeckled", aligned_fg)
+
         fg_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
         golden_fg = cv2.dilate(golden_fg, fg_kernel, iterations=2)
         aligned_fg = cv2.dilate(aligned_fg, fg_kernel, iterations=2)
         comparison_mask = cv2.bitwise_and(golden_fg, aligned_fg)
         if self._foreground_area(comparison_mask) == 0:
             comparison_mask = golden_fg
+        self._dbg("golden_fg_dilated", golden_fg)
+        self._dbg("aligned_fg_dilated", aligned_fg)
+        self._dbg("comparison_mask", comparison_mask)
 
         # "Missing content" hard reject: warpPerspective/warpAffine fill any
         # pixel outside the candidate's actual field of view with pure
@@ -765,6 +893,12 @@ class ContentGate:
         # Low local SSIM -> anomaly
         ssim_defect_mask = ((ssim_map < self.ssim_defect_threshold) * 255).astype(np.uint8)
 
+        self._dbg("mask_for_ssim", mask_for_ssim)
+        self._dbg("ssim_map", ssim_map)
+        self._dbg("ssim_defect_mask", ssim_defect_mask)
+        self._dbg("diff_map", diff_map)
+        self._dbg("diff_thresh", diff_thresh)
+
         # Step A: Merge SSIM + Diff masks (Union)
         step1_or = cv2.bitwise_or(ssim_defect_mask, diff_thresh)
 
@@ -780,6 +914,11 @@ class ContentGate:
         # Step D: Fill gaps / merge nearby defect fragments (Closing)
         kernel9 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
         combined = cv2.morphologyEx(step3_open, cv2.MORPH_CLOSE, kernel9, iterations=2)
+
+        self._dbg("step1_or", step1_or)
+        self._dbg("step2_and_comparison_mask", step2_and)
+        self._dbg("step3_open", step3_open)
+        self._dbg("step4_combined_close", combined)
 
         combined_with_boxes = cv2.cvtColor(combined, cv2.COLOR_GRAY2BGR)
         contours, _ = cv2.findContours(combined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)

@@ -24,6 +24,7 @@ Results are written to ``v3_evaluation``.
 from __future__ import annotations
 
 import os
+import gc
 from collections import defaultdict
 from pathlib import Path
 
@@ -35,7 +36,7 @@ import numpy as np
 import demov2 as evaluation
 from pipeline import LabelInspector
 
-V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_SINGLE_GOLDEN_AUGMENT_FIX"))
+V3_DIR = Path(os.environ.get("LABEL_V3_DIR", "v3_evaluation_SPEEDUP"))
 evaluation.OUT_DIR = V3_DIR
 evaluation.EVAL_DIR = V3_DIR
 evaluation.ALL_REPORTS_DIR = V3_DIR / "all_case_reports"
@@ -91,7 +92,16 @@ ADAPTIVE_SAFETY_MULTIPLIER = float(os.environ.get("LABEL_ADAPTIVE_SAFETY_MULTIPL
 
 def _adaptive_threshold(baseline_values, global_threshold):
     """min(global, max(floor, baseline_max * safety_multiplier)) — tightens
-    only, never loosens past `global_threshold`."""
+    only, never loosens past `global_threshold`.
+
+    Loosening was tried (calibrate upward toward a noisy sample's own clean
+    baseline) and measured worse on the full 360-case sweep: sample1 went
+    FP 10->14 and FN 2->4, while sample2 -- the case it was meant to help --
+    came out identical to this version. Reverted; the note is kept so the
+    experiment isn't repeated blind. A sample whose own clean-vs-clean
+    noise exceeds this threshold (sample1, sample6) is telling you its
+    capture setup is inconsistent, not that the threshold is wrong.
+    """
     floor = ADAPTIVE_FLOOR_FRACTION * global_threshold
     if not baseline_values:
         return global_threshold
@@ -112,6 +122,9 @@ def _adaptive_threshold(baseline_values, global_threshold):
 # for calibrating the reject threshold -- they are never added to the
 # actual reference pool the pipeline matches real candidates against.
 MIN_PROBE_SAMPLES = int(os.environ.get("LABEL_MIN_PROBE_SAMPLES", "8"))
+# Minimum ORB-registered clean probes needed before we trust a filtered
+# calibration set; below this we fall back to the unfiltered one.
+MIN_VALID_PROBES = int(os.environ.get("LABEL_MIN_VALID_PROBES", "5"))
 SYNTHETIC_PROBE_COUNT = int(os.environ.get("LABEL_SYNTHETIC_PROBE_COUNT", "16"))
 
 
@@ -228,12 +241,41 @@ def _report_rank_key(report):
     return (2, 0.0)  # REJECT_GATE1
 
 
-def best_match_report(inspector, golden_bgr_list, candidate_bgr):
+def best_match_report(inspector, golden_bgr_list, candidate_bgr, early_exit=True):
     """Compare candidate against every golden individually and keep the
     single best (most lenient) result — nearest-neighbor style, no
-    ensemble statistics."""
-    reports = [(g, inspector.inspect(g, candidate_bgr)) for g in golden_bgr_list]
-    best_golden, best_report = min(reports, key=lambda pair: _report_rank_key(pair[1]))
+    ensemble statistics.
+
+    Early-exits on the first PASS: `_report_rank_key` ranks every PASS
+    (category 0) below every REJECT_GATE2/REJECT_GATE1 (categories 1/2)
+    regardless of severity margin, so once any golden yields a PASS, no
+    remaining golden -- however well it would have scored -- can change
+    the final verdict. Each `inspector.inspect()` call is a full ORB+SSIM
+    comparison (~200-300ms); for the common case where a clean candidate
+    passes against an early golden in the list, this skips the remaining
+    N-1 comparisons entirely. Only changes *which* passing golden gets
+    reported/visualized (whichever passed first, not necessarily the
+    lowest-severity one) -- never changes the PASS/REJECT verdict itself.
+    Faulty candidates (no golden ever passes) still check all N, exactly
+    as before.
+
+    `early_exit=False` is REQUIRED for threshold calibration. Stopping at
+    the first PASS is only safe when the caller wants the *verdict*: the
+    returned severity is then whichever golden happened to pass first, not
+    the lowest across the set. Calibration measures that value to build a
+    sample's noise floor, so early-exiting there silently biases the
+    baseline upward -- measured: it raised zara's clean baseline
+    0.0035 -> 0.0348, its threshold 0.0225 -> 0.0523, and buried 10 of 20
+    real defects (signal 0.042-0.070) under the bar.
+    """
+    best_golden, best_report, best_key = None, None, None
+    for g in golden_bgr_list:
+        report = inspector.inspect(g, candidate_bgr)
+        key = _report_rank_key(report)
+        if best_key is None or key < best_key:
+            best_golden, best_report, best_key = g, report, key
+        if early_exit and key[0] == 0:  # PASS -- verdict can no longer change
+            break
     return best_report, best_golden
 
 
@@ -313,15 +355,54 @@ def main():
         # the ADAPTIVE_* comment above for why.
         golden_clean_cases = [c for c in cases if c["source_kind"] == "golden"]
         severity_baseline, diff_baseline = [], []
+        rejected_baseline, n_fallback_probes = [], 0
         for item in golden_clean_cases:
             probe_candidate = evaluation.load(item["candidate_path"])
-            probe_report, _ = best_match_report(inspector, item["reference_imgs"], probe_candidate)
+            probe_report, _ = best_match_report(
+                inspector, item["reference_imgs"], probe_candidate, early_exit=False
+            )
             g2 = probe_report.gate2
-            if g2 is not None:
+            if g2 is None:
+                continue
+            # Only pairs that registered on real ORB features describe this
+            # sample's photo-to-photo NOISE. A pair that fell back to
+            # minAreaRect geometric alignment (homography is None) is
+            # describing a registration FAILURE instead -- it is aligned
+            # visibly worse, so its severity is large, and feeding that into
+            # max(baseline) inflates the very threshold real defects have to
+            # clear. Measured cost of not filtering: when weakly-supported
+            # affine fits were rerouted to the fallback, zara's clean
+            # baseline rose 0.0035 -> 0.0348, its threshold 0.0225 -> 0.0523,
+            # and 7 genuine defects (signal 0.042-0.064) fell under the bar.
+            # A failed registration should never quietly desensitize the
+            # detector.
+            if g2.homography is None:
+                n_fallback_probes += 1
                 if g2.severity_frac is not None:
-                    severity_baseline.append(g2.severity_frac)
-                if g2.diff_severity_frac is not None:
-                    diff_baseline.append(g2.diff_severity_frac)
+                    rejected_baseline.append(g2.severity_frac)
+                continue
+            if g2.severity_frac is not None:
+                severity_baseline.append(g2.severity_frac)
+            if g2.diff_severity_frac is not None:
+                diff_baseline.append(g2.diff_severity_frac)
+
+        # Guard: if almost everything fell back there is no clean-registration
+        # population to calibrate from. Rather than calibrate off 1-2 samples,
+        # keep the unfiltered behaviour and say so.
+        if len(severity_baseline) < MIN_VALID_PROBES and rejected_baseline:
+            print(
+                f"{sample_dir.name}: only {len(severity_baseline)} of "
+                f"{len(golden_clean_cases)} clean probes registered on real ORB features "
+                f"(< {MIN_VALID_PROBES}); calibrating on the unfiltered set instead. "
+                f"Registration is unreliable for this sample."
+            )
+            severity_baseline = severity_baseline + rejected_baseline
+        elif n_fallback_probes:
+            print(
+                f"{sample_dir.name}: excluded {n_fallback_probes}/{len(golden_clean_cases)} clean "
+                f"probes from threshold calibration (geometric-fallback alignment, not a valid "
+                f"noise sample)."
+            )
 
         n_real_probes = len(severity_baseline)
         n_synthetic_probes = 0
@@ -329,13 +410,16 @@ def main():
             synthetic_imgs = synthesize_probe_goldens(golden_paths, SYNTHETIC_PROBE_COUNT, sample_dir.name)
             reference_pool = list(golden_imgs.values())
             for synth in synthetic_imgs:
-                probe_report, _ = best_match_report(inspector, reference_pool, synth)
+                probe_report, _ = best_match_report(
+                    inspector, reference_pool, synth, early_exit=False
+                )
                 g2 = probe_report.gate2
-                if g2 is not None:
-                    if g2.severity_frac is not None:
-                        severity_baseline.append(g2.severity_frac)
-                    if g2.diff_severity_frac is not None:
-                        diff_baseline.append(g2.diff_severity_frac)
+                if g2 is None or g2.homography is None:
+                    continue        # same rule as above: fallback != noise
+                if g2.severity_frac is not None:
+                    severity_baseline.append(g2.severity_frac)
+                if g2.diff_severity_frac is not None:
+                    diff_baseline.append(g2.diff_severity_frac)
             n_synthetic_probes = len(synthetic_imgs)
             print(
                 f"{sample_dir.name}: only {n_real_probes} real leave-one-out probe(s) available "
@@ -350,6 +434,17 @@ def main():
         adaptive_diff = _adaptive_threshold(diff_baseline, global_diff_threshold)
         inspector.gate2.severity_frac_reject_threshold = adaptive_severity
         inspector.gate2.diff_severity_frac_reject_threshold = adaptive_diff
+
+        if severity_baseline and max(severity_baseline) >= global_severity_threshold:
+            print(
+                f"*** {sample_dir.name}: its own clean golden-vs-golden severity reaches "
+                f"{max(severity_baseline):.3f}, at/above the {global_severity_threshold:.3f} "
+                f"reject threshold -- two photos of the same good label already disagree by "
+                f"more than a defect is allowed to. Expect false positives here that no "
+                f"threshold can remove; the fix is capture consistency (pose/framing/lighting), "
+                f"not tuning. (Loosening the threshold to fit this noise was tried and measured "
+                f"worse -- it cost more false negatives than the false positives it saved.)"
+            )
 
         sev_base_str = f"{max(severity_baseline):.4f}" if severity_baseline else "n/a"
         diff_base_str = f"{max(diff_baseline):.4f}" if diff_baseline else "n/a"
